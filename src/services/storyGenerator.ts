@@ -65,10 +65,24 @@ export const generateStory = async (prompt: StoryPrompt): Promise<Storybook> => 
     const description = `一个关于${mainCharacter}在${settingTranslation[setting] || '神奇世界'}里，经历${moodTranslation[mood] || '特别'}的冒险故事。${theme ? `故事蕴含着${theme}的主题。` : ''}${additionalElements ? `故事中还有${additionalElements}` : ''}`;
 
     // 2. 生成封面图片
-    const coverPrompt = `Create a children's book cover illustration for "${title}": ${description}. The style should be cute, colorful, and child-friendly.`;
+    const coverPrompt = `Create a children's book cover illustration for "${title}". Style requirements:
+- Combine the charm of children's drawings with professional illustration techniques
+- Use soft, watercolor-like textures with simple, clean lines
+- Color palette: warm, pastel colors with gentle transitions
+- Character design: simplified but well-proportioned, similar to Studio Ghibli's style
+- Background: subtle textures and gentle gradients
+- Overall mood: whimsical and inviting, maintaining professional quality while keeping childlike innocence
+- Add small, playful details that children can discover
+- Lighting: soft and warm, creating a cozy atmosphere
+Story details: ${description}`;
+
     let coverImage: string;
     try {
-      coverImage = await generateImage({ prompt: coverPrompt });
+      coverImage = await generateImage({ 
+        prompt: coverPrompt,
+        numInferenceSteps: 50,
+        guidanceScale: 7.5,
+      });
     } catch (error) {
       console.error('Error generating cover image:', error);
       throw new Error('封面图片生成失败，请稍后再试。');
@@ -88,8 +102,22 @@ export const generateStory = async (prompt: StoryPrompt): Promise<Storybook> => 
       // 根据页面文本生成图片
       let backgroundImage: string;
       try {
-        const pagePrompt = `Illustrate this scene from a children's story: ${pageText}. The scene should be cute, colorful, and engaging for children.`;
-        backgroundImage = await generateImage({ prompt: pagePrompt });
+        const pagePrompt = `Create a children's book illustration for this scene: "${pageText}". Style requirements:
+- Match the cover art style: blend of children's art and professional illustration
+- Scene composition: clear focal point with balanced negative space
+- Characters: expressive and endearing, with simple but distinctive features
+- Color harmony: use warm, pastel colors with gentle transitions
+- Depth: subtle layering and perspective to create dimension
+- Details: include small, interactive elements for children to discover
+- Texture: soft watercolor effects with clean linework
+- Mood: maintain story continuity while expressing the scene's emotion
+- Lighting: soft and warm, emphasizing important story elements`;
+
+        backgroundImage = await generateImage({ 
+          prompt: pagePrompt,
+          numInferenceSteps: 50,
+          guidanceScale: 7.5,
+        });
       } catch (error) {
         console.error(`Error generating image for page ${i + 1}:`, error);
         throw new Error(`第${i + 1}页的插图生成失败，请稍后再试。`);

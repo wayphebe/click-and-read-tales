@@ -40,8 +40,10 @@ async function callLLMAPI(messages: Message[]): Promise<string> {
     const requestBody = {
       model: MODEL,
       messages,
-      temperature: 0.7,
+      temperature: 0.8, // Increased for more creativity
       max_tokens: 2000,
+      presence_penalty: 0.6, // Added to encourage diverse vocabulary
+      frequency_penalty: 0.6, // Added to reduce repetition
     };
     
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
@@ -137,33 +139,55 @@ export async function generateStoryPages(
   character: string,
   mood: string,
   setting: string,
-  themes: string[]
+  themes: string[],
+  additionalElements?: string
 ): Promise<string[]> {
   const systemPrompt = `你是一个专业的儿童故事作家。请创作一个6页的儿童故事，遵循以下要求：
-1. 故事应该适合3-8岁的儿童阅读
-2. 每页2-3句话，使用简单易懂的语言
-3. 故事要有清晰的开始、发展和结局
-4. 包含互动元素和简单的问题来吸引读者
-5. 每页的内容要以"第X页："开头（X为1-6）
-6. 故事要富有教育意义和趣味性
-7. 确保故事内容积极向上，适合儿童
-8. 请严格按照"第1页："、"第2页："等格式标记每一页`;
+
+创作原则：
+1. 使用简单、童趣的语言，像孩子说话一样
+2. 加入重复的短语和情感表达
+3. 使用拟声词和动作词增加趣味性
+4. 保持天真、朴实的写作风格
+
+故事结构：
+1. 每页2-3句话，使用简单易懂的语言
+2. 故事要有清晰的开始、发展和结局
+3. 每页都要包含互动元素或简单问题
+4. 每页的内容必须以"第X页："开头（X为1-6）
+
+语言要求：
+1. 使用3-8岁儿童能理解的词汇
+2. 句子要简短，避免复杂的从句
+3. 适当重复关键词和短语
+4. 加入拟声词和感叹词
+
+互动设计：
+1. 每页加入寻找物品、动作模仿等互动
+2. 设计简单的是非题或选择题
+3. 鼓励读者参与故事发展
+
+格式规范：
+1. 严格按照"第1页："到"第6页："标记
+2. 每页结尾用句号
+3. 确保内容积极向上，适合儿童`;
 
   const userPrompt = `请创作一个有趣的儿童故事，包含以下元素：
 - 主角：${character}
 - 心情：${mood}
 - 场景：${setting}
 - 主题：${themes.join('、')}
+${additionalElements ? `- 额外元素：${additionalElements}` : ''}
 
-格式要求：
-1. 必须分为6页，每页都要以"第X页："开头（X为1-6）
-2. 每页2-3句话
-3. 要包含互动性的问题
-4. 使用简单的中文
-5. 每页结尾用句号。
+要求：
+1. 必须自然地融入所有指定元素，包括额外元素
+2. 每页都要有互动性的问题或动作引导
+3. 使用拟声词和动作词增加趣味性
+4. 加入适当的重复句式
+5. 确保每页都以"第X页："开头
 
 示例格式：
-第1页：小兔子在花园里蹦蹦跳跳。它看到了一朵美丽的花，你能找到它在哪里吗？
+第1页：小兔子蹦蹦跳跳地来到花园。"噗通噗通"，它的心跳得好快哦！你能找到藏在花丛中的小兔子吗？
 第2页：...（以此类推）`;
 
   try {
@@ -173,7 +197,7 @@ export async function generateStoryPages(
     ];
 
     const storyContent = await callLLMAPI(messages);
-    console.log('LLM Response:', storyContent); // 用于调试
+    console.log('LLM Response:', storyContent);
 
     const pages = formatStoryPages(storyContent);
     
@@ -181,7 +205,6 @@ export async function generateStoryPages(
       throw new Error('生成的故事页数不正确');
     }
 
-    // 确保每页都以句号结尾
     return pages.map(page => 
       page.endsWith('。') ? page : page + '。'
     );

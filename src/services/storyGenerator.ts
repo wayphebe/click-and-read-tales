@@ -38,7 +38,8 @@ export const generateStory = async (prompt: StoryPrompt): Promise<Storybook> => 
       mainCharacter,
       mood,
       setting || '神奇世界',
-      theme ? theme.split(',') : []
+      theme ? theme.split(',') : [],
+      additionalElements // Pass additionalElements to story generation
     );
 
     const moodTranslation: { [key: string]: string } = {
@@ -61,7 +62,7 @@ export const generateStory = async (prompt: StoryPrompt): Promise<Storybook> => 
 
     // 生成故事标题和描述
     const title = `${mainCharacter}的${settingTranslation[setting] || '神奇'}冒险`;
-    const description = `一个关于${mainCharacter}在${settingTranslation[setting] || '神奇世界'}里，经历${moodTranslation[mood] || '特别'}的冒险故事。${theme ? `故事蕴含着${theme}的主题。` : ''}${additionalElements}`;
+    const description = `一个关于${mainCharacter}在${settingTranslation[setting] || '神奇世界'}里，经历${moodTranslation[mood] || '特别'}的冒险故事。${theme ? `故事蕴含着${theme}的主题。` : ''}${additionalElements ? `故事中还有${additionalElements}` : ''}`;
 
     // 2. 生成封面图片
     const coverPrompt = `Create a children's book cover illustration for "${title}": ${description}. The style should be cute, colorful, and child-friendly.`;

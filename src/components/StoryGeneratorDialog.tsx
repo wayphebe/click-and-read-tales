@@ -1,12 +1,25 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Loader2 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 
 export interface StoryPrompt {
   mainCharacter: string;
@@ -117,91 +130,90 @@ const StoryGeneratorDialog: React.FC<StoryGeneratorDialogProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-6 mt-4">
-            {/* 主角输入 */}
-            <div className="space-y-2">
-              <Label htmlFor="mainCharacter">谁是故事的主角？</Label>
-              <Input
-                id="mainCharacter"
-                placeholder="例如：小兔子、小女孩、勇敢的小狮子..."
-                value={mainCharacter}
-                onChange={(e) => setMainCharacter(e.target.value)}
-                required
-              />
-            </div>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="mainCharacter">主角名字</Label>
+                <Input
+                  id="mainCharacter"
+                  value={mainCharacter}
+                  onChange={(e) => setMainCharacter(e.target.value)}
+                  placeholder="例如：小兔子、勇敢的小男孩..."
+                  required
+                />
+              </div>
 
-            {/* 心情选择 */}
-            <div className="space-y-2">
-              <Label htmlFor="mood">主角现在的心情是？</Label>
-              <Select value={mood} onValueChange={setMood} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择一个心情..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {moods.map(({ value, label }) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
+              <div>
+                <Label htmlFor="mood">故事情绪</Label>
+                <Select value={mood} onValueChange={setMood} required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择故事的主要情绪" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {moods.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="setting">故事场景</Label>
+                <Select value={setting} onValueChange={setSetting} required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择故事发生的地点" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {settings.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>故事主题（最多选择3个）</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {themes.map((theme) => (
+                    <Button
+                      key={theme}
+                      type="button"
+                      variant={selectedThemes.includes(theme) ? "default" : "outline"}
+                      onClick={() => handleThemeToggle(theme)}
+                      className="h-auto py-2"
+                    >
+                      {theme}
+                    </Button>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
+                </div>
+              </div>
 
-            {/* 场景选择 */}
-            <div className="space-y-2">
-              <Label htmlFor="setting">故事发生在哪里？</Label>
-              <Select value={setting} onValueChange={setSetting}>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择一个场景..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {settings.map(({ value, label }) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* 主题标签 */}
-            <div className="space-y-2">
-              <Label>选择故事主题（最多3个）</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {themes.map(theme => (
-                  <Badge
-                    key={theme}
-                    variant={selectedThemes.includes(theme) ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => handleThemeToggle(theme)}
-                  >
-                    {theme}
-                  </Badge>
-                ))}
+              <div>
+                <Label htmlFor="additionalElements">特别元素</Label>
+                <div className="mt-1">
+                  <Textarea
+                    id="additionalElements"
+                    value={additionalElements}
+                    onChange={(e) => setAdditionalElements(e.target.value)}
+                    placeholder="添加一些特别的元素到故事中，例如：一只会说话的黑猫、一把魔法雨伞、一颗会发光的石头..."
+                    className="h-20"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    添加一些特别的元素可以让故事更加有趣！可以是物品、动物、或任何你想加入的神奇元素。
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* 额外元素 */}
-            <div className="space-y-2">
-              <Label htmlFor="additionalElements">还想加入什么元素？</Label>
-              <Textarea
-                id="additionalElements"
-                placeholder="可以描述一些具体情节或者想要表达的内容..."
-                value={additionalElements}
-                onChange={(e) => setAdditionalElements(e.target.value)}
-                className="min-h-[100px]"
-              />
-            </div>
-
-            {/* 提交按钮 */}
-            <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={onClose}>
-                取消
+            <DialogFooter>
+              <Button type="submit" disabled={isGenerating}>
+                开始创作故事
               </Button>
-              <Button type="submit">
-                开始创作
-              </Button>
-            </div>
+            </DialogFooter>
           </form>
         )}
       </DialogContent>

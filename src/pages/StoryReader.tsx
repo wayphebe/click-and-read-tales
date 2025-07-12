@@ -115,7 +115,15 @@ const StoryReader = () => {
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="relative w-full max-w-4xl aspect-[4/3] bg-white rounded-magical shadow-magical p-8 border-2 border-magical-primary/10">
           {/* Background Scene */}
-          <div className="absolute inset-0 flex items-center justify-center text-8xl opacity-20">
+          <div 
+            className="absolute inset-0 rounded-magical overflow-hidden"
+            style={{
+              backgroundImage: `url(${currentPage.background})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          >
+            {/* Decorative Stars */}
             {[...Array(10)].map((_, i) => (
               <span
                 key={i}
@@ -130,7 +138,6 @@ const StoryReader = () => {
                 ✦
               </span>
             ))}
-            <span className="relative z-10">{currentPage.background}</span>
           </div>
 
           {/* Interactive Elements */}

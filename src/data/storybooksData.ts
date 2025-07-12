@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { generateStory, StoryGenerationRequest } from '../services/storyGeneration';
 
 export interface Storybook {
   id: string;
@@ -180,10 +181,23 @@ interface StorybooksStore {
   books: Storybook[];
   addBook: (book: Storybook) => void;
   getBook: (id: string) => Storybook | undefined;
+  generateNewStory: (request: StoryGenerationRequest) => Promise<Storybook>;
+  isGenerating: boolean;
 }
 
 export const useStorybooksStore = create<StorybooksStore>((set, get) => ({
   books: defaultStorybooks,
   addBook: (book) => set((state) => ({ books: [book, ...state.books] })),
   getBook: (id) => get().books.find(book => book.id === id),
+  generateNewStory: async (request) => {
+    set({ isGenerating: true });
+    try {
+      const newStory = await generateStory(request);
+      set((state) => ({ books: [newStory, ...state.books] }));
+      return newStory;
+    } finally {
+      set({ isGenerating: false });
+    }
+  },
+  isGenerating: false,
 }));

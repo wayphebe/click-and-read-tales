@@ -10,6 +10,11 @@ import type { StoryPrompt } from '@/components/StoryGeneratorDialog';
 import { generateStory } from '@/services/storyGenerator';
 import { useToast } from '@/components/ui/use-toast';
 
+interface GenerationProgress {
+  step: string;
+  progress: number;
+}
+
 const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -17,6 +22,10 @@ const Index = () => {
   const [collectedBooks, setCollectedBooks] = useState<Set<string>>(new Set());
   const [showGenerator, setShowGenerator] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState<GenerationProgress>({
+    step: '',
+    progress: 0
+  });
   
   const { books, addBook } = useStorybooksStore();
 
@@ -47,10 +56,26 @@ const Index = () => {
 
   const handleGenerateStory = async (prompt: StoryPrompt) => {
     setIsGenerating(true);
+    setGenerationProgress({ step: '正在构思故事...', progress: 0 });
+    
     try {
+      // 1. 生成故事文本
+      setGenerationProgress({ step: '正在创作故事内容...', progress: 20 });
       const newStory = await generateStory(prompt);
+      
+      // 2. 生成封面
+      setGenerationProgress({ step: '正在绘制精美封面...', progress: 40 });
+      
+      // 3. 生成插图
+      setGenerationProgress({ step: '正在为故事绘制插图...', progress: 60 });
+      
+      // 4. 最终处理
+      setGenerationProgress({ step: '正在完成最后的润色...', progress: 80 });
+      
       addBook(newStory);
       setShowGenerator(false);
+      setGenerationProgress({ step: '创作完成！', progress: 100 });
+      
       toast({
         title: "故事生成成功！",
         description: `《${newStory.title}》已经准备好啦，快来阅读吧！`,
@@ -64,6 +89,7 @@ const Index = () => {
       });
     } finally {
       setIsGenerating(false);
+      setGenerationProgress({ step: '', progress: 0 });
     }
   };
 
@@ -188,8 +214,10 @@ const Index = () => {
             {/* 故事生成器对话框 */}
             <StoryGeneratorDialog
               isOpen={showGenerator}
-              onClose={() => setShowGenerator(false)}
+              onClose={() => !isGenerating && setShowGenerator(false)}
               onGenerate={handleGenerateStory}
+              isGenerating={isGenerating}
+              generationProgress={generationProgress}
             />
           </div>
 

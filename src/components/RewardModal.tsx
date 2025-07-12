@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { Trophy, Star, Gift } from 'lucide-react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Star, Trophy, Gift } from 'lucide-react';
 
 interface RewardModalProps {
   isOpen: boolean;
@@ -19,38 +19,49 @@ const RewardModal: React.FC<RewardModalProps> = ({
   const getRewardIcon = () => {
     switch (rewardType) {
       case 'star':
-        return <Star className="w-16 h-16 text-yellow-400 fill-current" />;
+        return <Star className="w-20 h-20 text-yellow-400 fill-current animate-pulse-soft" />;
       case 'trophy':
-        return <Trophy className="w-16 h-16 text-orange-400" />;
+        return <Trophy className="w-20 h-20 text-yellow-400 animate-bounce-gentle" />;
       case 'gift':
-        return <Gift className="w-16 h-16 text-purple-400" />;
+        return <Gift className="w-20 h-20 text-purple-400 animate-wiggle" />;
       default:
-        return <Star className="w-16 h-16 text-yellow-400 fill-current" />;
+        return <Star className="w-20 h-20 text-yellow-400 fill-current animate-pulse-soft" />;
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md mx-auto bg-gradient-to-b from-yellow-50 to-orange-50 border-none">
-        <div className="text-center p-6">
-          <div className="flex justify-center mb-4 animate-bounce">
-            {getRewardIcon()}
+      <DialogContent className="max-w-md mx-auto bg-gradient-reward border-none rounded-reward shadow-reward overflow-hidden p-0">
+        <div className="relative">
+          {/* 装饰性背景元素 */}
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute -top-10 -left-10 w-40 h-40 bg-yellow-100 rounded-full opacity-20 animate-pulse-soft" />
+            <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-blue-100 rounded-full opacity-20 animate-pulse-soft" />
           </div>
-          
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            太棒了！
-          </h2>
-          
-          <p className="text-lg text-gray-600 mb-6">
-            {message}
-          </p>
-          
-          <button
-            onClick={onClose}
-            className="bg-gradient-to-r from-green-400 to-blue-400 text-white font-bold py-3 px-8 rounded-2xl hover:from-green-500 hover:to-blue-500 transition-all duration-200 shadow-lg"
-          >
-            继续探索
-          </button>
+
+          {/* 主要内容 */}
+          <div className="relative text-center px-8 py-10">
+            <div className="transform hover:scale-110 transition-transform duration-300">
+              {getRewardIcon()}
+            </div>
+            
+            <DialogTitle className="mt-6 text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent font-magical">
+              太棒了！
+            </DialogTitle>
+            
+            <DialogDescription className="mt-4 text-lg text-gray-600 font-magical">
+              {message}
+            </DialogDescription>
+            
+            <button
+              onClick={onClose}
+              className="mt-8 px-8 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-full 
+                transform hover:scale-105 transition-all duration-300 hover:shadow-[0_4px_16px_rgba(79,70,229,0.4)]
+                focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 font-magical"
+            >
+              继续探索
+            </button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Trophy } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Trophy, Star } from 'lucide-react';
 import { useStorybooksStore } from '@/data/storybooksData';
 import InteractiveElement from '@/components/InteractiveElement';
 import AudioPlayer from '@/components/AudioPlayer';
@@ -75,22 +75,22 @@ const StoryReader = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-200 via-blue-100 to-purple-100">
+    <div className="min-h-screen bg-magical-background font-magical">
       {/* Header */}
       <div className="flex items-center justify-between p-4">
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-2 bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg hover:bg-white transition-all duration-200"
+          className="flex items-center gap-2 bg-white rounded-magical px-4 py-2 shadow-magical hover:shadow-lg transition-all duration-200 text-magical-primary border-2 border-magical-primary/10"
         >
           <ArrowLeft className="w-5 h-5" />
           <span className="font-medium">返回</span>
         </button>
 
         <div className="flex flex-col items-center">
-          <div className="text-lg font-bold text-gray-700 mb-1">
+          <div className="text-lg font-bold text-magical-primary mb-1">
             {storybook.title}
           </div>
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-magical-text/80">
             第 {currentPageIndex + 1} 页 / {totalPages} 页
           </div>
         </div>
@@ -103,9 +103,9 @@ const StoryReader = () => {
 
       {/* Progress Bar */}
       <div className="px-4 mb-4">
-        <div className="w-full bg-white/50 rounded-full h-2">
+        <div className="w-full bg-magical-primary/5 rounded-full h-2">
           <div 
-            className="bg-gradient-to-r from-green-400 to-blue-400 h-2 rounded-full transition-all duration-500"
+            className="bg-gradient-magical h-2 rounded-full transition-all duration-500"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -113,10 +113,24 @@ const StoryReader = () => {
 
       {/* Story Content */}
       <div className="flex-1 flex flex-col items-center justify-center p-4">
-        <div className="relative w-full max-w-4xl aspect-[4/3] bg-gradient-to-br from-white/90 to-blue-50/90 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border border-white/20">
+        <div className="relative w-full max-w-4xl aspect-[4/3] bg-white rounded-magical shadow-magical p-8 border-2 border-magical-primary/10">
           {/* Background Scene */}
           <div className="absolute inset-0 flex items-center justify-center text-8xl opacity-20">
-            {currentPage.background}
+            {[...Array(10)].map((_, i) => (
+              <span
+                key={i}
+                className="absolute text-magical-secondary animate-twinkle"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 3}s`,
+                  fontSize: `${Math.random() * 1 + 0.5}rem`,
+                }}
+              >
+                ✦
+              </span>
+            ))}
+            <span className="relative z-10">{currentPage.background}</span>
           </div>
 
           {/* Interactive Elements */}
@@ -131,15 +145,15 @@ const StoryReader = () => {
           ))}
 
           {/* Story Text */}
-          <div className="absolute bottom-8 left-8 right-8 bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-lg">
-            <p className="text-xl leading-relaxed text-gray-800 font-medium">
+          <div className="absolute bottom-8 left-8 right-8 bg-white rounded-magical p-6 shadow-magical border-2 border-magical-primary/10">
+            <p className="text-xl leading-relaxed text-magical-text">
               {currentPage.text}
             </p>
           </div>
 
           {/* Final Story Completion Badge */}
           {isLastPage && storyCompleted && (
-            <div className="absolute top-8 right-8 bg-gradient-to-r from-yellow-400 to-orange-400 text-white rounded-full p-3 shadow-lg animate-bounce">
+            <div className="absolute top-8 right-8 bg-gradient-warm text-magical-primary rounded-full p-3 shadow-magical animate-float">
               <Trophy className="w-6 h-6" />
             </div>
           )}
@@ -150,10 +164,10 @@ const StoryReader = () => {
           <button
             onClick={handlePrevPage}
             disabled={isFirstPage}
-            className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all duration-200 ${
+            className={`flex items-center gap-2 px-6 py-3 rounded-magical font-bold transition-all duration-200 ${
               isFirstPage
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : 'bg-gradient-to-r from-purple-400 to-pink-400 text-white hover:from-purple-500 hover:to-pink-500 shadow-lg'
+                ? 'bg-magical-primary/10 text-magical-primary/40 cursor-not-allowed'
+                : 'bg-gradient-magical text-white hover:shadow-magical'
             }`}
           >
             <ArrowLeft className="w-5 h-5" />
@@ -166,10 +180,10 @@ const StoryReader = () => {
                 key={index}
                 className={`w-3 h-3 rounded-full transition-all duration-200 ${
                   index === currentPageIndex
-                    ? 'bg-gradient-to-r from-blue-400 to-purple-400'
+                    ? 'bg-gradient-magical'
                     : index < currentPageIndex
-                    ? 'bg-green-400'
-                    : 'bg-gray-300'
+                    ? 'bg-magical-accent'
+                    : 'bg-magical-primary/20'
                 }`}
               />
             ))}
@@ -177,7 +191,7 @@ const StoryReader = () => {
 
           <button
             onClick={handleNextPage}
-            className="flex items-center gap-2 bg-gradient-to-r from-green-400 to-blue-400 text-white font-bold px-6 py-3 rounded-2xl hover:from-green-500 hover:to-blue-500 transition-all duration-200 shadow-lg"
+            className="flex items-center gap-2 bg-gradient-magical text-white font-bold px-6 py-3 rounded-magical hover:shadow-magical transition-all duration-200"
           >
             {isLastPage ? (storyCompleted ? '返回首页' : '完成故事') : '下一页'}
             <ArrowRight className="w-5 h-5" />
@@ -198,7 +212,7 @@ const StoryReader = () => {
         isOpen={showFinalReward}
         onClose={handleFinalRewardClose}
         rewardType="trophy"
-        message={`🎉 恭喜完成故事《${storybook.title}》！你已经学会了如何与情绪做朋友。获得特殊勋章：【情绪好朋友】`}
+        message={rewardMessage}
       />
     </div>
   );

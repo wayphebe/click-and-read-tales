@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Trophy } from 'lucide-react';
-import { storybooks } from '@/data/storybooksData';
+import { useStorybooksStore } from '@/data/storybooksData';
 import InteractiveElement from '@/components/InteractiveElement';
 import AudioPlayer from '@/components/AudioPlayer';
 import RewardModal from '@/components/RewardModal';
@@ -18,7 +18,8 @@ const StoryReader = () => {
   const [showFinalReward, setShowFinalReward] = useState(false);
   const [storyCompleted, setStoryCompleted] = useState(false);
 
-  const storybook = storybooks.find(book => book.id === id);
+  const { getBook } = useStorybooksStore();
+  const storybook = getBook(id || '');
 
   useEffect(() => {
     if (!storybook) {

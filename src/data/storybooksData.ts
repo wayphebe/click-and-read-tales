@@ -1,3 +1,4 @@
+import { create } from 'zustand';
 
 export interface Storybook {
   id: string;
@@ -26,7 +27,7 @@ export interface InteractiveElement {
 
 export const categories = ['全部', '情绪管理', '冒险', '童话', '科学', '动物'];
 
-export const storybooks: Storybook[] = [
+const defaultStorybooks: Storybook[] = [
   {
     id: '1',
     title: '我的情绪小毛球',
@@ -174,3 +175,15 @@ export const storybooks: Storybook[] = [
     ]
   }
 ];
+
+interface StorybooksStore {
+  books: Storybook[];
+  addBook: (book: Storybook) => void;
+  getBook: (id: string) => Storybook | undefined;
+}
+
+export const useStorybooksStore = create<StorybooksStore>((set, get) => ({
+  books: defaultStorybooks,
+  addBook: (book) => set((state) => ({ books: [book, ...state.books] })),
+  getBook: (id) => get().books.find(book => book.id === id),
+}));

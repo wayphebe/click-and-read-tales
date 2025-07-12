@@ -1,22 +1,31 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Heart, User, Star } from 'lucide-react';
+import { Sparkles, Heart, User, Star, Wand2 } from 'lucide-react';
 import BookCard from '@/components/BookCard';
 import CategoryFilter from '@/components/CategoryFilter';
-import { storybooks, categories } from '@/data/storybooksData';
+import StoryGeneratorDialog from '@/components/StoryGeneratorDialog';
+import { categories, useStorybooksStore } from '@/data/storybooksData';
+import type { StoryPrompt } from '@/components/StoryGeneratorDialog';
+import { generateStory } from '@/services/storyGenerator';
+import { useToast } from '@/components/ui/use-toast';
 
 const Index = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState('全部');
   const [collectedBooks, setCollectedBooks] = useState<Set<string>>(new Set());
+  const [showGenerator, setShowGenerator] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  const { books, addBook } = useStorybooksStore();
 
   const filteredBooks = selectedCategory === '全部' 
-    ? storybooks 
-    : storybooks.filter(book => book.category === selectedCategory);
+    ? books
+    : books.filter(book => book.category === selectedCategory);
 
   const handleQuickStart = () => {
-    const randomBook = storybooks[Math.floor(Math.random() * storybooks.length)];
+    const randomBook = books[Math.floor(Math.random() * books.length)];
     navigate(`/story/${randomBook.id}`);
   };
 
@@ -34,6 +43,29 @@ const Index = () => {
       }
       return newSet;
     });
+  };
+
+  const handleGenerateStory = async (prompt: StoryPrompt) => {
+    setIsGenerating(true);
+    try {
+      const newStory = await generateStory(prompt);
+      addBook(newStory);
+      setShowGenerator(false);
+      toast({
+        title: "故事生成成功！",
+        description: `《${newStory.title}》已经准备好啦，快来阅读吧！`,
+      });
+      // 自动跳转到新故事
+      navigate(`/story/${newStory.id}`);
+    } catch (error) {
+      toast({
+        title: "生成故事失败",
+        description: "抱歉，生成故事时出现了问题，请稍后再试。",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -68,16 +100,34 @@ const Index = () => {
             准备好开始阅读冒险了吗？
           </h2>
           
-          <button
-            onClick={handleQuickStart}
-            className="bg-gradient-to-r from-orange-400 via-red-400 to-pink-400 text-white font-bold text-xl px-12 py-4 rounded-full hover:from-orange-500 hover:via-red-500 hover:to-pink-500 transition-all duration-300 shadow-2xl hover:shadow-3xl transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3">
-              <Sparkles className="w-6 h-6" />
-              立即开始神奇冒险
-              <Sparkles className="w-6 h-6" />
-            </div>
-          </button>
+          <div className="flex justify-center gap-4">
+            <button
+              onClick={handleQuickStart}
+              className="bg-gradient-to-r from-orange-400 via-red-400 to-pink-400 text-white font-bold text-xl px-12 py-4 rounded-full hover:from-orange-500 hover:via-red-500 hover:to-pink-500 transition-all duration-300 shadow-2xl hover:shadow-3xl transform hover:scale-105"
+            >
+              <div className="flex items-center gap-3">
+                <Sparkles className="w-6 h-6" />
+                立即开始神奇冒险
+                <Sparkles className="w-6 h-6" />
+              </div>
+            </button>
+
+            <button
+              onClick={() => setShowGenerator(true)}
+              disabled={isGenerating}
+              className={`bg-gradient-to-r from-purple-400 via-violet-400 to-indigo-400 text-white font-bold text-xl px-12 py-4 rounded-full transition-all duration-300 shadow-2xl hover:shadow-3xl transform hover:scale-105 ${
+                isGenerating 
+                  ? 'opacity-70 cursor-not-allowed'
+                  : 'hover:from-purple-500 hover:via-violet-500 hover:to-indigo-500'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Wand2 className={`w-6 h-6 ${isGenerating ? 'animate-spin' : ''}`} />
+                {isGenerating ? '正在创作中...' : '创作专属故事'}
+                <Wand2 className={`w-6 h-6 ${isGenerating ? 'animate-spin' : ''}`} />
+              </div>
+            </button>
+          </div>
         </div>
 
         {/* Category Filter */}
@@ -116,6 +166,13 @@ const Index = () => {
             </p>
           </div>
         )}
+
+        {/* Story Generator Dialog */}
+        <StoryGeneratorDialog
+          isOpen={showGenerator}
+          onClose={() => setShowGenerator(false)}
+          onGenerate={handleGenerateStory}
+        />
       </div>
 
       {/* Footer */}

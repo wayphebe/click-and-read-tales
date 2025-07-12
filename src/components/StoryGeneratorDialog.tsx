@@ -72,6 +72,7 @@ const StoryGeneratorDialog: React.FC<StoryGeneratorDialogProps> = ({
   isGenerating,
   generationProgress,
 }) => {
+  const formId = React.useId();
   const [mainCharacter, setMainCharacter] = useState('');
   const [mood, setMood] = useState('');
   const [setting, setSetting] = useState('');
@@ -130,12 +131,12 @@ const StoryGeneratorDialog: React.FC<StoryGeneratorDialogProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form id={formId} onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-4">
               <div>
-                <Label htmlFor="mainCharacter">主角名字</Label>
+                <Label htmlFor={`${formId}-character`}>主角名字</Label>
                 <Input
-                  id="mainCharacter"
+                  id={`${formId}-character`}
                   value={mainCharacter}
                   onChange={(e) => setMainCharacter(e.target.value)}
                   placeholder="例如：小兔子、勇敢的小男孩..."
@@ -144,9 +145,14 @@ const StoryGeneratorDialog: React.FC<StoryGeneratorDialogProps> = ({
               </div>
 
               <div>
-                <Label htmlFor="mood">故事情绪</Label>
-                <Select value={mood} onValueChange={setMood} required>
-                  <SelectTrigger>
+                <Label>故事情绪</Label>
+                <Select 
+                  value={mood} 
+                  onValueChange={setMood} 
+                  required
+                  name="story-mood"
+                >
+                  <SelectTrigger aria-label="选择故事的主要情绪">
                     <SelectValue placeholder="选择故事的主要情绪" />
                   </SelectTrigger>
                   <SelectContent>
@@ -160,9 +166,14 @@ const StoryGeneratorDialog: React.FC<StoryGeneratorDialogProps> = ({
               </div>
 
               <div>
-                <Label htmlFor="setting">故事场景</Label>
-                <Select value={setting} onValueChange={setSetting} required>
-                  <SelectTrigger>
+                <Label>故事场景</Label>
+                <Select 
+                  value={setting} 
+                  onValueChange={setSetting} 
+                  required
+                  name="story-setting"
+                >
+                  <SelectTrigger aria-label="选择故事发生的地点">
                     <SelectValue placeholder="选择故事发生的地点" />
                   </SelectTrigger>
                   <SelectContent>
@@ -175,9 +186,13 @@ const StoryGeneratorDialog: React.FC<StoryGeneratorDialogProps> = ({
                 </Select>
               </div>
 
-              <div>
-                <Label>故事主题（最多选择3个）</Label>
-                <div className="grid grid-cols-2 gap-2 mt-2">
+              <div role="group" aria-labelledby={`${formId}-themes-label`}>
+                <Label id={`${formId}-themes-label`}>故事主题（最多选择3个）</Label>
+                <div 
+                  className="grid grid-cols-2 gap-2 mt-2"
+                  role="group"
+                  aria-label="故事主题选择"
+                >
                   {themes.map((theme) => (
                     <Button
                       key={theme}
@@ -185,6 +200,7 @@ const StoryGeneratorDialog: React.FC<StoryGeneratorDialogProps> = ({
                       variant={selectedThemes.includes(theme) ? "default" : "outline"}
                       onClick={() => handleThemeToggle(theme)}
                       className="h-auto py-2"
+                      aria-pressed={selectedThemes.includes(theme)}
                     >
                       {theme}
                     </Button>
@@ -193,16 +209,21 @@ const StoryGeneratorDialog: React.FC<StoryGeneratorDialogProps> = ({
               </div>
 
               <div>
-                <Label htmlFor="additionalElements">特别元素</Label>
+                <Label htmlFor={`${formId}-elements`}>特别元素</Label>
                 <div className="mt-1">
                   <Textarea
-                    id="additionalElements"
+                    id={`${formId}-elements`}
                     value={additionalElements}
                     onChange={(e) => setAdditionalElements(e.target.value)}
                     placeholder="添加一些特别的元素到故事中，例如：一只会说话的黑猫、一把魔法雨伞、一颗会发光的石头..."
                     className="h-20"
+                    aria-describedby={`${formId}-elements-hint`}
                   />
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p 
+                    id={`${formId}-elements-hint`}
+                    className="text-sm text-gray-500 mt-1"
+                    aria-hidden="true"
+                  >
                     添加一些特别的元素可以让故事更加有趣！可以是物品、动物、或任何你想加入的神奇元素。
                   </p>
                 </div>

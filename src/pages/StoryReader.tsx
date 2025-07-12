@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Trophy } from 'lucide-react';
 import { storybooks } from '@/data/storybooksData';
 import InteractiveElement from '@/components/InteractiveElement';
 import AudioPlayer from '@/components/AudioPlayer';
@@ -15,6 +15,8 @@ const StoryReader = () => {
   const [showReward, setShowReward] = useState(false);
   const [rewardMessage, setRewardMessage] = useState('');
   const [interactedElements, setInteractedElements] = useState<Set<string>>(new Set());
+  const [showFinalReward, setShowFinalReward] = useState(false);
+  const [storyCompleted, setStoryCompleted] = useState(false);
 
   const storybook = storybooks.find(book => book.id === id);
 
@@ -32,6 +34,8 @@ const StoryReader = () => {
   const currentPage = storybook.pages[currentPageIndex];
   const isLastPage = currentPageIndex === storybook.pages.length - 1;
   const isFirstPage = currentPageIndex === 0;
+  const totalPages = storybook.pages.length;
+  const progress = ((currentPageIndex + 1) / totalPages) * 100;
 
   const handleInteraction = (elementId: string, reward: string) => {
     if (!interactedElements.has(elementId)) {
@@ -46,7 +50,14 @@ const StoryReader = () => {
       setCurrentPageIndex(prev => prev + 1);
       setInteractedElements(new Set());
     } else {
-      navigate('/');
+      // 故事结束，显示最终奖励
+      if (!storyCompleted) {
+        setStoryCompleted(true);
+        setRewardMessage(`恭喜你完成了《${storybook.title}》的完整故事！`);
+        setShowFinalReward(true);
+      } else {
+        navigate('/');
+      }
     }
   };
 
@@ -55,6 +66,11 @@ const StoryReader = () => {
       setCurrentPageIndex(prev => prev - 1);
       setInteractedElements(new Set());
     }
+  };
+
+  const handleFinalRewardClose = () => {
+    setShowFinalReward(false);
+    // 可以选择留在当前页或返回首页
   };
 
   return (
@@ -69,14 +85,29 @@ const StoryReader = () => {
           <span className="font-medium">返回</span>
         </button>
 
-        <div className="text-lg font-bold text-gray-700">
-          {storybook.title}
+        <div className="flex flex-col items-center">
+          <div className="text-lg font-bold text-gray-700 mb-1">
+            {storybook.title}
+          </div>
+          <div className="text-sm text-gray-600">
+            第 {currentPageIndex + 1} 页 / {totalPages} 页
+          </div>
         </div>
 
         <AudioPlayer 
           isPlaying={isPlaying}
           onTogglePlay={() => setIsPlaying(!isPlaying)}
         />
+      </div>
+
+      {/* Progress Bar */}
+      <div className="px-4 mb-4">
+        <div className="w-full bg-white/50 rounded-full h-2">
+          <div 
+            className="bg-gradient-to-r from-green-400 to-blue-400 h-2 rounded-full transition-all duration-500"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
       </div>
 
       {/* Story Content */}
@@ -104,6 +135,13 @@ const StoryReader = () => {
               {currentPage.text}
             </p>
           </div>
+
+          {/* Final Story Completion Badge */}
+          {isLastPage && storyCompleted && (
+            <div className="absolute top-8 right-8 bg-gradient-to-r from-yellow-400 to-orange-400 text-white rounded-full p-3 shadow-lg animate-bounce">
+              <Trophy className="w-6 h-6" />
+            </div>
+          )}
         </div>
 
         {/* Navigation */}
@@ -128,6 +166,8 @@ const StoryReader = () => {
                 className={`w-3 h-3 rounded-full transition-all duration-200 ${
                   index === currentPageIndex
                     ? 'bg-gradient-to-r from-blue-400 to-purple-400'
+                    : index < currentPageIndex
+                    ? 'bg-green-400'
                     : 'bg-gray-300'
                 }`}
               />
@@ -138,18 +178,26 @@ const StoryReader = () => {
             onClick={handleNextPage}
             className="flex items-center gap-2 bg-gradient-to-r from-green-400 to-blue-400 text-white font-bold px-6 py-3 rounded-2xl hover:from-green-500 hover:to-blue-500 transition-all duration-200 shadow-lg"
           >
-            {isLastPage ? '完成阅读' : '下一页'}
+            {isLastPage ? (storyCompleted ? '返回首页' : '完成故事') : '下一页'}
             <ArrowRight className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      {/* Reward Modal */}
+      {/* Interactive Reward Modal */}
       <RewardModal
         isOpen={showReward}
         onClose={() => setShowReward(false)}
         rewardType="star"
         message={rewardMessage}
+      />
+
+      {/* Final Story Completion Modal */}
+      <RewardModal
+        isOpen={showFinalReward}
+        onClose={handleFinalRewardClose}
+        rewardType="trophy"
+        message={`🎉 恭喜完成故事《${storybook.title}》！你已经学会了如何与情绪做朋友。获得特殊勋章：【情绪好朋友】`}
       />
     </div>
   );

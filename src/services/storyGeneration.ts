@@ -22,21 +22,27 @@ export const generateStory = async (request: StoryGenerationRequest): Promise<St
   const storyId = generateStoryId();
   const { category, title = '新的故事' } = request;
 
-  // 生成封面图片 - 更新提示词以实现平衡的艺术风格
-  const coverPrompt = `Create a children's book cover illustration for "${title}". Style requirements:
-- Combine the charm of children's drawings with professional illustration techniques
-- Use soft, watercolor-like textures with simple, clean lines
-- Color palette: warm, pastel colors with gentle transitions
-- Character design: simplified but well-proportioned, similar to Studio Ghibli's style
-- Background: subtle textures and gentle gradients
-- Overall mood: whimsical and inviting, maintaining professional quality while keeping childlike innocence
-- Add small, playful details that children can discover
-- Lighting: soft and warm, creating a cozy atmosphere`;
+  // 生成封面图片
+  const coverPrompt = `Create a children's book illustration with restrained artistic style. Style requirements:
+- Composition: at least 30% must be clean empty space (留白)
+- Simple outlines and suggestive expressions rather than detailed illustrations
+- Use minimal, essential strokes to suggest forms
+- Colors must be desaturated and harmonious
+- Artistic approach: like a simple sketch with light color washes
+- Avoid strictly:
+  * saturated colors
+  * complex textures
+  * 3D rendering effects
+  * intricate patterns
+  * excessive details
+- Layout should feel natural and flowing
+- Each element should be simple and naive in form
+Theme: "${title}"`;
 
   const coverImage = await generateImage({ 
     prompt: coverPrompt,
-    numInferenceSteps: 50,
-    guidanceScale: 7.5,
+    numInferenceSteps: 40,
+    guidanceScale: 6.5,
   });
 
   // 创建故事页面
@@ -46,22 +52,26 @@ export const generateStory = async (request: StoryGenerationRequest): Promise<St
   for (let i = 1; i <= numPages; i++) {
     const pageId = generatePageId(storyId, i);
     
-    // 为每个页面生成背景图片 - 更新提示词以保持一致的艺术风格
-    const pagePrompt = `Create a children's book illustration for page ${i} of "${title}". Style requirements:
-- Match the cover art style: blend of children's art and professional illustration
-- Scene composition: clear focal point with balanced negative space
-- Characters: expressive and endearing, with simple but distinctive features
-- Color harmony: use the established color palette from the cover
-- Depth: subtle layering and perspective to create dimension
-- Details: include small, interactive elements for children to discover
-- Texture: soft watercolor effects with clean linework
-- Mood: maintain story continuity while expressing the current scene's emotion
-- Lighting: consistent with cover, emphasizing important story elements`;
+    // 为每个页面生成背景图片
+    const pagePrompt = `Create a children's book page following the cover's artistic direction. Style requirements:
+- Maintain at least 30% clean empty space in composition
+- Continue the simple, suggestive art style
+- Keep all elements minimal and essential
+- Use the same desaturated color approach
+- Avoid strictly:
+  * saturated colors
+  * complex textures
+  * 3D rendering effects
+  * intricate patterns
+  * excessive details
+- Focus on flowing, natural composition
+- Elements should maintain naive simplicity
+Page ${i} of "${title}"`;
 
     const backgroundImage = await generateImage({ 
       prompt: pagePrompt,
-      numInferenceSteps: 50,
-      guidanceScale: 7.5,
+      numInferenceSteps: 40,
+      guidanceScale: 6.5,
     });
 
     // 创建交互元素 - 保持简单但有趣的表情符号

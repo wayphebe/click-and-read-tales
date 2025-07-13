@@ -92,47 +92,47 @@ testLLMAPI().then(success => {
 });
 
 function formatStoryPages(content: string): string[] {
-  // 尝试多种可能的页面分隔符
-  const pageMarkers = [
-    /第[一二三四五六]页[：:]/,
-    /第[123456]页[：:]/,
-    /[123456][.、][^.]*?(?=[123456][.、]|$)/,
-  ];
+  // 使用场景分隔符分割内容
+  const scenes = content
+    .split('---')
+    .map(scene => scene.trim())
+    .filter(scene => scene.length > 0);
+  
+  // 如果没有使用分隔符，尝试按句子分割
+  if (scenes.length < 2) {
+    const sentences = content
+      .split(/[。！？]/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .map(s => s + '。');
 
-  for (const marker of pageMarkers) {
-    const pages = content
-      .split(marker)
-      .map(page => page.trim())
-      .filter(page => page.length > 0);
-
-    if (pages.length === 6) {
-      return pages;
+    // 确保每个场景至少有一个完整的句子
+    const scenes = [];
+    let currentScene = [];
+    
+    for (const sentence of sentences) {
+      currentScene.push(sentence);
+      
+      // 当当前场景有1-2个句子时，形成一个新场景
+      if (currentScene.length >= 1 && currentScene.length <= 2) {
+        scenes.push(currentScene.join(''));
+        currentScene = [];
+      }
+    }
+    
+    // 处理剩余的句子
+    if (currentScene.length > 0) {
+      scenes.push(currentScene.join(''));
     }
   }
 
-  // 如果没有找到合适的分隔符，尝试强制分割
-  const cleanContent = content
-    .replace(/[^。！？\n]+(?=[。！？])/g, match => match.trim())
-    .split(/[。！？]/)
-    .filter(sentence => sentence.trim().length > 0)
-    .map(sentence => sentence.trim());
-
-  if (cleanContent.length >= 6) {
-    // 将内容平均分配到6页
-    const pages: string[] = [];
-    const sentencesPerPage = Math.ceil(cleanContent.length / 6);
-    
-    for (let i = 0; i < 6; i++) {
-      const start = i * sentencesPerPage;
-      const end = Math.min(start + sentencesPerPage, cleanContent.length);
-      const pageContent = cleanContent.slice(start, end).join('。') + '。';
-      pages.push(pageContent);
-    }
-    
-    return pages;
+  // 确保正好有6个场景
+  const finalScenes = scenes.slice(0, 6);
+  while (finalScenes.length < 6) {
+    finalScenes.push('继续探索...');
   }
 
-  throw new Error('无法正确分割故事内容');
+  return finalScenes;
 }
 
 export async function generateStoryPages(
@@ -142,53 +142,54 @@ export async function generateStoryPages(
   themes: string[],
   additionalElements?: string
 ): Promise<string[]> {
-  const systemPrompt = `你是一个专业的儿童故事作家。请创作一个6页的儿童故事，遵循以下要求：
+  const systemPrompt = `想象你正坐在一个温暖的小房间里，周围围着一群好奇的小朋友，他们眼睛亮晶晶地看着你。你不是在"写"故事，而是在用心"讲"故事。
 
-创作原则：
-1. 使用简单、童趣的语言，像孩子说话一样
-2. 加入重复的短语和情感表达
-3. 使用拟声词和动作词增加趣味性
-4. 保持天真、朴实的写作风格
+你要讲一个六个场景的绘本故事。每个场景都是一幅画面，配上简短的文字。
 
-故事结构：
-1. 每页2-3句话，使用简单易懂的语言
-2. 故事要有清晰的开始、发展和结局
-3. 每页都要包含互动元素或简单问题
-4. 每页的内容必须以"第X页："开头（X为1-6）
+记住：
+- 故事不是教材，是心与心的对话
+- 让故事自然流露，像在跟小朋友聊天
+- 用心感受每个角色，让他们自己告诉你他们的故事
+- 相信直觉，相信第一个出现在脑海中的画面
 
-语言要求：
-1. 使用3-8岁儿童能理解的词汇
-2. 句子要简短，避免复杂的从句
-3. 适当重复关键词和短语
-4. 加入拟声词和感叹词
+讲故事时：
+- 每个场景只描述一个画面和一个情节
+- 场景之间要自然连贯，像溪水流淌
+- 用简单的语言，让画面在心里展开
+- 不要怕重复，童真本就喜欢重复
+- 用声音、动作等感官描述增加趣味
 
-互动设计：
-1. 每页加入寻找物品、动作模仿等互动
-2. 设计简单的是非题或选择题
-3. 鼓励读者参与故事发展
+互动时：
+- 用自然的问题引导小朋友思考和想象
+- 让小朋友也能参与到故事中
+- 让惊喜在故事中自然发生
 
-格式规范：
-1. 严格按照"第1页："到"第6页："标记
-2. 每页结尾用句号
-3. 确保内容积极向上，适合儿童`;
+格式要求：
+- 每个场景都是独立的一个画面
+- 每个场景的文字要简短自然，像在跟小朋友说话
+- 只用中文，不要使用英文
+- 每个场景用"---"分隔
+- 每个场景1-2句话，不要太长`;
 
-  const userPrompt = `请创作一个有趣的儿童故事，包含以下元素：
-- 主角：${character}
-- 心情：${mood}
-- 场景：${setting}
-- 主题：${themes.join('、')}
-${additionalElements ? `- 额外元素：${additionalElements}` : ''}
+  const userPrompt = `让我们一起讲一个关于${character}的故事吧。
 
-要求：
-1. 必须自然地融入所有指定元素，包括额外元素
-2. 每页都要有互动性的问题或动作引导
-3. 使用拟声词和动作词增加趣味性
-4. 加入适当的重复句式
-5. 确保每页都以"第X页："开头
+${character}现在在${setting}里，心里充满了${mood}的感觉。
+${additionalElements ? `在这里，${additionalElements}` : ''}
+${themes.length > 0 ? `我们可以聊聊${themes.join('、')}。` : ''}
 
-示例格式：
-第1页：小兔子蹦蹦跳跳地来到花园。"噗通噗通"，它的心跳得好快哦！你能找到藏在花丛中的小兔子吗？
-第2页：...（以此类推）`;
+让我们跟着${character}的脚步，
+一起去看看会遇到什么样的惊喜。
+
+记得：
+- 每个场景都是一幅独立的画面
+- 场景之间要自然连接
+- 用温暖的语气讲述
+- 让小朋友能参与其中
+
+示例场景：
+小朋友，你看！${character}正在${setting}里轻轻地走着，它的心里满是${mood}的感觉...
+---
+（继续用六个独立场景讲述故事）`;
 
   try {
     const messages: Message[] = [

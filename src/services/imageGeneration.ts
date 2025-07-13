@@ -36,8 +36,8 @@ export const generateImage = async ({
   prompt,
   imageSize = '1024x1024',
   batchSize = 1,
-  numInferenceSteps = 20,
-  guidanceScale = 7.5,
+  numInferenceSteps = 40,  // 增加步数以获得更细腻的效果
+  guidanceScale = 6.5,     // 降低一点以获得更自然的效果
 }: ImageGenerationRequest): Promise<string> => {
   let retryCount = 0;
 

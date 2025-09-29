@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 
 export interface StoryPrompt {
   mainCharacter: string;
@@ -27,11 +28,14 @@ export interface StoryPrompt {
   setting?: string;
   theme?: string;
   additionalElements?: string;
+  streamingMode?: boolean; // 新增流式模式选项
 }
 
 interface GenerationProgress {
   step: string;
   progress: number;
+  currentPage?: number;
+  totalPages?: number;
 }
 
 interface StoryGeneratorDialogProps {
@@ -78,6 +82,7 @@ const StoryGeneratorDialog: React.FC<StoryGeneratorDialogProps> = ({
   const [setting, setSetting] = useState('');
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
   const [additionalElements, setAdditionalElements] = useState('');
+  const [streamingMode, setStreamingMode] = useState(true); // 默认开启流式模式
 
   const handleThemeToggle = (theme: string) => {
     setSelectedThemes(prev =>
@@ -95,6 +100,7 @@ const StoryGeneratorDialog: React.FC<StoryGeneratorDialogProps> = ({
       setting,
       theme: selectedThemes.join(','),
       additionalElements,
+      streamingMode,
     });
   };
 
@@ -123,123 +129,138 @@ const StoryGeneratorDialog: React.FC<StoryGeneratorDialogProps> = ({
                       style={{ width: `${generationProgress.progress}%` }}
                     />
                   </div>
+                  <div className="mt-2 text-sm text-gray-500">
+                    {generationProgress.currentPage && generationProgress.totalPages
+                      ? `第 ${generationProgress.currentPage} / ${generationProgress.totalPages} 页`
+                      : `${generationProgress.progress}%`}
+                  </div>
                 </div>
               )}
               <p className="text-sm text-gray-500">
-                请稍候，我们正在为你创作一个精彩的故事...
+                {streamingMode 
+                  ? '故事内容已准备好，插图正在后台生成...'
+                  : '请稍候，我们正在为你创作一个精彩的故事...'
+                }
               </p>
             </div>
           </div>
         ) : (
           <form id={formId} onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor={`${formId}-character`}>主角名字</Label>
-                <Input
-                  id={`${formId}-character`}
-                  value={mainCharacter}
-                  onChange={(e) => setMainCharacter(e.target.value)}
-                  placeholder="例如：小兔子、勇敢的小男孩..."
-                  required
+            {/* 生成模式选择 */}
+            <div className="space-y-3">
+              <Label className="text-base font-medium">生成模式</Label>
+              <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                <Switch
+                  id="streaming-mode"
+                  checked={streamingMode}
+                  onCheckedChange={setStreamingMode}
                 />
-              </div>
-
-              <div>
-                <Label>故事情绪</Label>
-                <Select 
-                  value={mood} 
-                  onValueChange={setMood} 
-                  required
-                  name="story-mood"
-                >
-                  <SelectTrigger aria-label="选择故事的主要情绪">
-                    <SelectValue placeholder="选择故事的主要情绪" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {moods.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>故事场景</Label>
-                <Select 
-                  value={setting} 
-                  onValueChange={setSetting} 
-                  required
-                  name="story-setting"
-                >
-                  <SelectTrigger aria-label="选择故事发生的地点">
-                    <SelectValue placeholder="选择故事发生的地点" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {settings.map((s) => (
-                      <SelectItem key={s.value} value={s.value}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div role="group" aria-labelledby={`${formId}-themes-label`}>
-                <Label id={`${formId}-themes-label`}>故事主题（最多选择3个）</Label>
-                <div 
-                  className="grid grid-cols-2 gap-2 mt-2"
-                  role="group"
-                  aria-label="故事主题选择"
-                >
-                  {themes.map((theme) => (
-                    <Button
-                      key={theme}
-                      type="button"
-                      variant={selectedThemes.includes(theme) ? "default" : "outline"}
-                      onClick={() => handleThemeToggle(theme)}
-                      className="h-auto py-2"
-                      aria-pressed={selectedThemes.includes(theme)}
-                    >
-                      {theme}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor={`${formId}-elements`}>特别元素</Label>
-                <div className="mt-1">
-                  <Textarea
-                    id={`${formId}-elements`}
-                    value={additionalElements}
-                    onChange={(e) => setAdditionalElements(e.target.value)}
-                    placeholder="添加一些特别的元素到故事中，例如：一只会说话的黑猫、一把魔法雨伞、一颗会发光的石头..."
-                    className="h-20"
-                    aria-describedby={`${formId}-elements-hint`}
-                  />
-                  <p 
-                    id={`${formId}-elements-hint`}
-                    className="text-sm text-gray-500 mt-1"
-                    aria-hidden="true"
-                  >
-                    添加一些特别的元素可以让故事更加有趣！可以是物品、动物、或任何你想加入的神奇元素。
+                <div className="flex-1">
+                  <Label htmlFor="streaming-mode" className="text-sm font-medium">
+                    {streamingMode ? '快速模式' : '完整模式'}
+                  </Label>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {streamingMode 
+                      ? '立即开始阅读，插图在后台生成'
+                      : '等待所有内容生成完成后开始阅读'
+                    }
                   </p>
                 </div>
               </div>
             </div>
 
-            <DialogFooter>
-              <Button type="submit" disabled={isGenerating}>
-                开始创作故事
-              </Button>
-            </DialogFooter>
+            {/* 主角 */}
+            <div className="space-y-2">
+              <Label htmlFor="mainCharacter">故事主角</Label>
+              <Input
+                id="mainCharacter"
+                placeholder="比如：小兔子、小熊、小公主..."
+                value={mainCharacter}
+                onChange={(e) => setMainCharacter(e.target.value)}
+                required
+              />
+            </div>
+
+            {/* 心情 */}
+            <div className="space-y-2">
+              <Label htmlFor="mood">主角的心情</Label>
+              <Select value={mood} onValueChange={setMood} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="选择主角的心情" />
+                </SelectTrigger>
+                <SelectContent>
+                  {moods.map((mood) => (
+                    <SelectItem key={mood.value} value={mood.value}>
+                      {mood.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 场景 */}
+            <div className="space-y-2">
+              <Label htmlFor="setting">故事场景</Label>
+              <Select value={setting} onValueChange={setSetting} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="选择故事发生的场景" />
+                </SelectTrigger>
+                <SelectContent>
+                  {settings.map((setting) => (
+                    <SelectItem key={setting.value} value={setting.value}>
+                      {setting.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 主题 */}
+            <div className="space-y-2">
+              <Label>故事主题（最多选择3个）</Label>
+              <div className="flex flex-wrap gap-2">
+                {themes.map((theme) => (
+                  <Badge
+                    key={theme}
+                    variant={selectedThemes.includes(theme) ? "default" : "outline"}
+                    className="cursor-pointer hover:bg-primary/10"
+                    onClick={() => handleThemeToggle(theme)}
+                  >
+                    {theme}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            {/* 额外元素 */}
+            <div className="space-y-2">
+              <Label htmlFor="additionalElements">额外元素（可选）</Label>
+              <Textarea
+                id="additionalElements"
+                placeholder="比如：魔法棒、会说话的树、彩虹桥..."
+                value={additionalElements}
+                onChange={(e) => setAdditionalElements(e.target.value)}
+                rows={3}
+              />
+            </div>
           </form>
         )}
+
+        <DialogFooter>
+          {!isGenerating && (
+            <>
+              <Button variant="outline" onClick={onClose}>
+                取消
+              </Button>
+              <Button form={formId} type="submit">
+                开始创作
+              </Button>
+            </>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
 
-export default StoryGeneratorDialog; 
+export default StoryGeneratorDialog;

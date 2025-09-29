@@ -1,18 +1,20 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Heart, User, Star, Wand2 } from 'lucide-react';
 import BookCard from '@/components/BookCard';
 import CategoryFilter from '@/components/CategoryFilter';
 import StoryGeneratorDialog from '@/components/StoryGeneratorDialog';
-import { categories, useStorybooksStore } from '@/data/storybooksData';
+import { categories, useStorybooksStore, type StreamingStory } from '@/data/storybooksData';
 import type { StoryPrompt } from '@/components/StoryGeneratorDialog';
 import { generateStory } from '@/services/storyGenerator';
+import { StreamingStoryGenerator } from '@/services/streamingStoryGenerator';
 import { useToast } from '@/components/ui/use-toast';
 
 interface GenerationProgress {
   step: string;
   progress: number;
+  currentPage?: number;
+  totalPages?: number;
 }
 
 const Index = () => {
@@ -27,7 +29,14 @@ const Index = () => {
     progress: 0
   });
   
-  const { books, addBook } = useStorybooksStore();
+  const { 
+    books, 
+    addBook, 
+    startStreamingGeneration,
+    updateStreamingStory,
+    setGenerationProgress: setStoreProgress,
+    setGenerating: setStoreGenerating
+  } = useStorybooksStore();
 
   const filteredBooks = selectedCategory === '全部' 
     ? books
@@ -55,6 +64,89 @@ const Index = () => {
   };
 
   const handleGenerateStory = async (prompt: StoryPrompt) => {
+    if (prompt.streamingMode) {
+      // 流式生成模式
+      await handleStreamingGeneration(prompt);
+    } else {
+      // 传统生成模式
+      await handleTraditionalGeneration(prompt);
+    }
+  };
+
+  const handleStreamingGeneration = async (prompt: StoryPrompt) => {
+    setIsGenerating(true);
+    setStoreGenerating(true);
+    setGenerationProgress({ step: '正在准备...', progress: 0 });
+    
+    try {
+      // 创建流式生成器
+      const generator = new StreamingStoryGenerator({
+        onProgress: (progress) => {
+          setGenerationProgress({
+            step: progress.step,
+            progress: progress.progress,
+            currentPage: progress.currentPage,
+            totalPages: progress.totalPages
+          });
+          setStoreProgress({
+            step: progress.step,
+            progress: progress.progress,
+            currentPage: progress.currentPage,
+            totalPages: progress.totalPages
+          });
+        },
+        onPageReady: (page, pageIndex) => {
+          // 页面准备就绪时的处理
+          console.log(`Page ${pageIndex + 1} is ready:`, page);
+        },
+        onComplete: () => {
+          setGenerationProgress({ step: '创作完成！', progress: 100 });
+          setStoreProgress({ step: '创作完成！', progress: 100, currentPage: 0, totalPages: 0 });
+          
+          toast({
+            title: "故事创作完成！",
+            description: "所有插图都已生成完成，享受阅读吧！",
+          });
+        },
+        onError: (error, pageIndex) => {
+          console.error(`Error on page ${pageIndex}:`, error);
+          toast({
+            title: "生成过程中出现问题",
+            description: `第${pageIndex + 1}页插图生成失败，但故事内容仍然可用。`,
+            variant: "destructive",
+          });
+        }
+      });
+
+      // 开始流式生成
+      const streamingStory = await generator.generateStory(prompt);
+      
+      // 更新状态管理
+      updateStreamingStory(streamingStory);
+      setStoreGenerating(true);
+      
+      // 立即跳转到阅读页面
+      setShowGenerator(false);
+      navigate(`/story/${streamingStory.id}`);
+      
+      toast({
+        title: "故事内容已准备好！",
+        description: "插图正在后台生成，你可以立即开始阅读！",
+      });
+      
+    } catch (error) {
+      console.error('Streaming generation error:', error);
+      toast({
+        title: "生成故事失败",
+        description: "抱歉，生成故事时出现了问题，请稍后再试。",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleTraditionalGeneration = async (prompt: StoryPrompt) => {
     setIsGenerating(true);
     setGenerationProgress({ step: '正在构思故事...', progress: 0 });
     
@@ -98,142 +190,109 @@ const Index = () => {
       <div className="relative">
         {/* 装饰性星星背景 */}
         <div className="fixed inset-0 pointer-events-none">
-          {[...Array(30)].map((_, i) => (
-            <span
-              key={i}
-              className="absolute text-magical-secondary/20 animate-twinkle"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 3}s`,
-                fontSize: `${Math.random() * 1 + 0.5}rem`,
-              }}
-            >
-              ✦
-            </span>
-          ))}
+          <div className="absolute top-20 left-10 text-yellow-300 animate-pulse">
+            <Star className="h-6 w-6" />
+          </div>
+          <div className="absolute top-40 right-20 text-pink-300 animate-pulse delay-1000">
+            <Star className="h-4 w-4" />
+          </div>
+          <div className="absolute top-60 left-1/4 text-blue-300 animate-pulse delay-2000">
+            <Star className="h-5 w-5" />
+          </div>
+          <div className="absolute top-80 right-1/3 text-purple-300 animate-pulse delay-3000">
+            <Star className="h-3 w-3" />
+          </div>
         </div>
 
         {/* 主要内容 */}
-        <div className="relative">
-          {/* 顶部导航 */}
-          <div className="container mx-auto px-4 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Sparkles className="w-8 h-8 text-magical-primary" />
-                <h1 className="text-3xl font-bold text-magical-primary">魔法绘本世界</h1>
-              </div>
-              
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-sm">
-                  <Star className="w-5 h-5 text-magical-secondary" />
-                  <span className="font-medium text-magical-primary">收集了 {collectedBooks.size} 本绘本</span>
-                </div>
-                
-                <button className="bg-white/80 backdrop-blur-sm rounded-full p-2 hover:bg-white/90 transition-all duration-200 shadow-sm">
-                  <User className="w-6 h-6 text-magical-primary" />
-                </button>
-              </div>
-            </div>
+        <div className="relative z-10 container mx-auto px-4 py-8">
+          {/* 头部 */}
+          <div className="text-center mb-12">
+            <h1 className="text-5xl font-bold text-gray-800 mb-4">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">
+                点击阅读故事
+              </span>
+            </h1>
+            <p className="text-xl text-gray-600 mb-8">
+              每个故事都是一次奇妙的冒险，每个点击都带来新的惊喜
+            </p>
+            
+            {/* 快速开始按钮 */}
+            <button
+              onClick={handleQuickStart}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-8 py-4 rounded-full text-lg font-semibold hover:from-purple-600 hover:to-pink-600 transform hover:scale-105 transition-all duration-200 shadow-lg"
+            >
+              <Sparkles className="h-6 w-6" />
+              快速开始阅读
+            </button>
           </div>
 
-          <div className="container mx-auto px-4 py-8">
-            {/* 快速开始区域 */}
-            <div className="text-center mb-12">
-              <h2 className="text-2xl font-bold text-magical-primary mb-4">
-                准备好开始阅读冒险了吗？
-              </h2>
-              
-              <div className="flex justify-center gap-4">
-                <button
-                  onClick={handleQuickStart}
-                  className="bg-white/80 backdrop-blur-sm text-magical-primary font-bold text-xl px-12 py-4 rounded-magical hover:shadow-magical transition-all duration-300 transform hover:scale-105"
-                >
-                  <div className="flex items-center gap-3">
-                    <Sparkles className="w-6 h-6" />
-                    立即开始神奇冒险
-                    <Sparkles className="w-6 h-6" />
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setShowGenerator(true)}
-                  disabled={isGenerating}
-                  className={`bg-white/80 backdrop-blur-sm text-magical-primary font-bold text-xl px-12 py-4 rounded-magical transition-all duration-300 shadow-magical transform hover:scale-105 ${
-                    isGenerating 
-                      ? 'opacity-70 cursor-not-allowed'
-                      : 'hover:shadow-lg'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Wand2 className={`w-6 h-6 ${isGenerating ? 'animate-spin' : ''}`} />
-                    {isGenerating ? '正在创作中...' : '创作专属故事'}
-                    <Wand2 className={`w-6 h-6 ${isGenerating ? 'animate-spin' : ''}`} />
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* 分类过滤器 */}
-            <div className="mb-8">
-              <h3 className="text-xl font-bold text-magical-primary mb-4">选择你喜欢的故事类型</h3>
-              <CategoryFilter
-                categories={categories}
-                selectedCategory={selectedCategory}
-                onCategoryChange={setSelectedCategory}
-              />
-            </div>
-
-            {/* 绘本网格 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredBooks.map((book) => (
-                <BookCard
-                  key={book.id}
-                  id={book.id}
-                  title={book.title}
-                  cover={book.cover}
-                  category={book.category}
-                  description={book.description}
-                  isCollected={collectedBooks.has(book.id)}
-                  onRead={() => handleReadBook(book.id)}
-                  onToggleCollect={() => handleToggleCollect(book.id)}
-                />
-              ))}
-            </div>
-
-            {/* 空状态 */}
-            {filteredBooks.length === 0 && (
-              <div className="text-center py-12">
-                <div className="text-6xl mb-4">✦</div>
-                <p className="text-xl text-magical-text">
-                  这个分类下还没有绘本，请选择其他分类
-                </p>
-              </div>
-            )}
-
-            {/* 故事生成器对话框 */}
-            <StoryGeneratorDialog
-              isOpen={showGenerator}
-              onClose={() => !isGenerating && setShowGenerator(false)}
-              onGenerate={handleGenerateStory}
-              isGenerating={isGenerating}
-              generationProgress={generationProgress}
+          {/* 分类筛选 */}
+          <div className="mb-8">
+            <CategoryFilter
+              categories={categories}
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
             />
           </div>
 
-          {/* 页脚 */}
-          <div className="container mx-auto px-4 py-8 text-center">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Star className="w-5 h-5 text-magical-secondary" />
-              <span className="font-medium text-magical-primary">为5-12岁儿童精心设计</span>
-              <Star className="w-5 h-5 text-magical-secondary" />
-            </div>
-            <p className="text-magical-primary/80">
-              在阅读中发现世界，在互动中成长快乐
-            </p>
+          {/* 创建故事按钮 */}
+          <div className="mb-8 text-center">
+            <button
+              onClick={() => setShowGenerator(true)}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-6 py-3 rounded-full font-semibold hover:from-blue-600 hover:to-cyan-600 transform hover:scale-105 transition-all duration-200 shadow-lg"
+            >
+              <Wand2 className="h-5 w-5" />
+              创作专属故事
+            </button>
           </div>
+
+          {/* 故事列表 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredBooks.map((book) => (
+              <BookCard
+                key={book.id}
+                book={book}
+                onRead={() => handleReadBook(book.id)}
+                onToggleCollect={() => handleToggleCollect(book.id)}
+                isCollected={collectedBooks.has(book.id)}
+              />
+            ))}
+          </div>
+
+          {/* 空状态 */}
+          {filteredBooks.length === 0 && (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">📚</div>
+              <h3 className="text-2xl font-semibold text-gray-600 mb-2">
+                {selectedCategory === '全部' ? '还没有故事' : `没有${selectedCategory}类别的故事`}
+              </h3>
+              <p className="text-gray-500 mb-6">
+                {selectedCategory === '全部' 
+                  ? '点击"创作专属故事"开始你的第一个故事吧！'
+                  : '尝试其他分类或创作新的故事'
+                }
+              </p>
+              <button
+                onClick={() => setShowGenerator(true)}
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-full font-semibold hover:from-purple-600 hover:to-pink-600 transform hover:scale-105 transition-all duration-200"
+              >
+                <Wand2 className="h-5 w-5" />
+                创作第一个故事
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* 故事生成对话框 */}
+      <StoryGeneratorDialog
+        isOpen={showGenerator}
+        onClose={() => setShowGenerator(false)}
+        onGenerate={handleGenerateStory}
+        isGenerating={isGenerating}
+        generationProgress={generationProgress}
+      />
     </div>
   );
 };

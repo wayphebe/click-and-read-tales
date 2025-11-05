@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { generateStory, StoryGenerationRequest } from '../services/storyGeneration';
+import { StreamingStoryGenerator } from '../services/streamingStoryGenerator';
 
 export interface Storybook {
   id: string;
@@ -506,6 +507,10 @@ interface StorybooksStore extends StreamingGenerationState {
   updateStreamingStory: (story: StreamingStory) => void;
   setGenerationProgress: (progress: StreamingGenerationState['generationProgress']) => void;
   setGenerating: (isGenerating: boolean) => void;
+  // 生成器实例管理
+  currentGenerator: StreamingStoryGenerator | null;
+  setGenerator: (generator: StreamingStoryGenerator | null) => void;
+  getGenerator: () => StreamingStoryGenerator | null;
 }
 
 export const useStorybooksStore = create<StorybooksStore>((set, get) => ({
@@ -518,6 +523,7 @@ export const useStorybooksStore = create<StorybooksStore>((set, get) => ({
     currentPage: 0,
     totalPages: 0
   },
+  currentGenerator: null,
   addBook: (book) => set((state) => ({ books: [book, ...state.books] })),
   getBook: (id) => get().books.find(book => book.id === id),
   generateNewStory: async (request) => {
@@ -551,5 +557,11 @@ export const useStorybooksStore = create<StorybooksStore>((set, get) => ({
   },
   setGenerating: (isGenerating) => {
     set({ isGenerating });
+  },
+  setGenerator: (generator) => {
+    set({ currentGenerator: generator });
+  },
+  getGenerator: () => {
+    return get().currentGenerator;
   }
 }));

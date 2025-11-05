@@ -35,7 +35,8 @@ const Index = () => {
     startStreamingGeneration,
     updateStreamingStory,
     setGenerationProgress: setStoreProgress,
-    setGenerating: setStoreGenerating
+    setGenerating: setStoreGenerating,
+    setGenerator
   } = useStorybooksStore();
 
   const filteredBooks = selectedCategory === '全部' 
@@ -120,6 +121,9 @@ const Index = () => {
 
       // 开始流式生成
       const streamingStory = await generator.generateStory(prompt);
+      
+      // 保存生成器实例到store
+      setGenerator(generator);
       
       // 更新状态管理
       updateStreamingStory(streamingStory);

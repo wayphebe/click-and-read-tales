@@ -6,10 +6,12 @@ import InteractiveElement from '@/components/InteractiveElement';
 import StoryQuestion from '@/components/StoryQuestion';
 import AudioPlayer from '@/components/AudioPlayer';
 import RewardModal from '@/components/RewardModal';
+import { useToast } from '@/components/ui/use-toast';
 
 const StoryReader = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showReward, setShowReward] = useState(false);
@@ -18,8 +20,9 @@ const StoryReader = () => {
   const [showFinalReward, setShowFinalReward] = useState(false);
   const [storyCompleted, setStoryCompleted] = useState(false);
   const [selectedAnswers, setSelectedAnswers] = useState<{ [pageId: string]: string }>({});
+  const [isGeneratingNextPage, setIsGeneratingNextPage] = useState(false);
 
-  const { getBook, currentStory, isGenerating, generationProgress } = useStorybooksStore();
+  const { getBook, currentStory, isGenerating, generationProgress, getGenerator, updateStreamingStory, setGenerationProgress } = useStorybooksStore();
   
   // 优先使用流式故事，否则使用普通故事
   const storybook = currentStory || getBook(id || '');
@@ -67,7 +70,10 @@ const StoryReader = () => {
     }
   };
 
-  const handleAnswer = (option: QuestionOption) => {
+  const handleAnswer = async (option: QuestionOption) => {
+    if (!storybook) return;
+    
+    // 保存选择
     setSelectedAnswers(prev => ({
       ...prev,
       [currentPage.id]: option.id
@@ -76,9 +82,76 @@ const StoryReader = () => {
     // 显示反馈
     setRewardMessage(option.feedback);
     setShowReward(true);
+
+    // 如果是流式故事且不是最后一页，生成下一页
+    if (isStreamingStory && streamingStory && !streamingStory.isComplete) {
+      const generator = getGenerator();
+      if (generator && currentPageIndex === streamingStory.pages.length - 1) {
+        // 这是当前最后一页，用户做出了选择，生成下一页
+        setIsGeneratingNextPage(true);
+        
+        try {
+          setGenerationProgress({
+            step: '正在创作下一页...',
+            progress: 50,
+            currentPage: currentPageIndex + 2,
+            totalPages: 5
+          });
+
+          const nextPage = await generator.generateNextPage(option.text, option.id);
+          
+          if (nextPage) {
+            // 更新故事
+            const updatedStory = generator.getCurrentStory();
+            if (updatedStory) {
+              updateStreamingStory(updatedStory);
+              // 自动跳转到新页面
+              setTimeout(() => {
+                setCurrentPageIndex(prev => prev + 1);
+                setIsGeneratingNextPage(false);
+                setGenerationProgress({
+                  step: '',
+                  progress: 0,
+                  currentPage: 0,
+                  totalPages: 0
+                });
+              }, 500);
+            }
+          } else {
+            // 故事已完成
+            setIsGeneratingNextPage(false);
+            setGenerationProgress({
+              step: '',
+              progress: 0,
+              currentPage: 0,
+              totalPages: 0
+            });
+          }
+        } catch (error) {
+          console.error('Error generating next page:', error);
+          setIsGeneratingNextPage(false);
+          setGenerationProgress({
+            step: '',
+            progress: 0,
+            currentPage: 0,
+            totalPages: 0
+          });
+          toast({
+            title: "生成下一页失败",
+            description: "抱歉，生成下一页时出现了问题。",
+            variant: "destructive",
+          });
+        }
+      }
+    }
   };
 
   const handleNextPage = () => {
+    // 如果正在生成下一页，不允许翻页
+    if (isGeneratingNextPage) {
+      return;
+    }
+    
     if (!isLastPage) {
       setCurrentPageIndex(prev => prev + 1);
     } else if (!storyCompleted) {
@@ -241,12 +314,20 @@ const StoryReader = () => {
           {currentPage.question && (
             <div className="p-8 bg-gradient-to-br from-yellow-50 via-orange-50 to-pink-50">
               <div className="max-w-4xl mx-auto">
-                <StoryQuestion
-                  question={currentPage.question.question}
-                  options={currentPage.question.options}
-                  onAnswer={handleAnswer}
-                  selectedAnswer={selectedAnswers[currentPage.id]}
-                />
+                {isGeneratingNextPage ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-purple-500" />
+                    <p className="text-lg font-medium text-gray-600">正在创作下一页...</p>
+                    <p className="text-sm text-gray-500 mt-2">请稍候，魔法正在发生</p>
+                  </div>
+                ) : (
+                  <StoryQuestion
+                    question={currentPage.question.question}
+                    options={currentPage.question.options}
+                    onAnswer={handleAnswer}
+                    selectedAnswer={selectedAnswers[currentPage.id]}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -307,7 +388,7 @@ const StoryReader = () => {
           
           <button
             onClick={handleNextPage}
-            disabled={isLastPage && storyCompleted}
+            disabled={(isLastPage && storyCompleted) || isGeneratingNextPage}
             className="p-3 rounded-full bg-gradient-to-r from-pink-100 to-purple-100 hover:from-pink-200 hover:to-purple-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
           >
             <ArrowRight className="h-5 w-5 text-gray-700" />

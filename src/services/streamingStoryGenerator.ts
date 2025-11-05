@@ -1,7 +1,7 @@
 import { generateImage } from './imageGeneration';
-import { generateStoryPages } from './aiService';
+import { generateStoryPages, generateStoryPageWithChoices } from './aiService';
 import type { StoryPrompt } from '@/components/StoryGeneratorDialog';
-import type { Storybook, StoryPage, InteractiveElement } from '@/data/storybooksData';
+import type { Storybook, StoryPage, InteractiveElement, StoryQuestion, QuestionOption } from '@/data/storybooksData';
 
 // Helper function to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -55,6 +55,8 @@ export class StreamingStoryGenerator {
   private callbacks: StreamingCallbacks;
   private pages: StreamingPage[] = [];
   private isGenerating = false;
+  private storyPrompt: StoryPrompt | null = null;
+  private currentStory: StreamingStory | null = null;
 
   constructor(callbacks: StreamingCallbacks = {}) {
     this.storyId = generateStoryId();
@@ -63,22 +65,25 @@ export class StreamingStoryGenerator {
 
   async generateStory(prompt: StoryPrompt): Promise<StreamingStory> {
     this.isGenerating = true;
+    this.storyPrompt = prompt;
     const { mainCharacter, mood, setting, theme = '', additionalElements = '' } = prompt;
 
     try {
-      // 1. 立即生成故事文本
+      // 1. 生成第一页故事内容（带选择项）
       this.callbacks.onProgress?.({
-        step: '正在创作故事内容...',
+        step: '正在创作第一页故事...',
         progress: 20,
-        currentPage: 0,
-        totalPages: 0
+        currentPage: 1,
+        totalPages: 5
       });
 
-      const storyPages = await generateStoryPages(
+      const firstPageData = await generateStoryPageWithChoices(
         mainCharacter,
         mood,
         setting || '神奇世界',
         theme ? theme.split(',') : [],
+        1,
+        [],
         additionalElements
       );
 
@@ -86,15 +91,27 @@ export class StreamingStoryGenerator {
       const title = `${mainCharacter}的${getSettingTranslation(setting)}冒险`;
       const description = generateDescription(mainCharacter, mood, setting, theme, additionalElements);
 
-      // 3. 创建流式页面
-      this.pages = storyPages.map((text, index) => ({
-        id: generatePageId(this.storyId, index + 1),
-        text,
-        background: '', // 空字符串表示图片未生成
+      // 3. 创建第一页（带选择项）
+      const firstPage: StreamingPage = {
+        id: generatePageId(this.storyId, 1),
+        text: firstPageData.text,
+        background: '', // 图片将在后台生成
         interactiveElements: generateBasicElements(mainCharacter),
         isReady: false,
-        isGenerating: false
-      }));
+        isGenerating: false,
+        question: firstPageData.choices.length > 0 ? {
+          id: `question_${this.storyId}_1`,
+          question: '接下来会发生什么呢？',
+          options: firstPageData.choices.map((choice, index) => ({
+            id: `choice_${this.storyId}_1_${index + 1}`,
+            text: choice.text,
+            emoji: choice.emoji,
+            feedback: choice.description
+          }))
+        } : undefined
+      };
+
+      this.pages = [firstPage];
 
       const baseStory: StreamingStory = {
         id: this.storyId,
@@ -107,14 +124,16 @@ export class StreamingStoryGenerator {
         pages: this.pages
       };
 
+      this.currentStory = baseStory;
+
       this.callbacks.onProgress?.({
-        step: '故事内容已准备好，开始生成插图...',
+        step: '第一页故事内容已准备好，开始生成封面和插图...',
         progress: 40,
-        currentPage: 0,
-        totalPages: this.pages.length + 1 // +1 for cover
+        currentPage: 1,
+        totalPages: 5
       });
 
-      // 4. 开始流式生成图片
+      // 4. 开始流式生成封面和第一页图片
       this.startStreamingGeneration(baseStory);
 
       return baseStory;
@@ -124,26 +143,112 @@ export class StreamingStoryGenerator {
     }
   }
 
+  // 生成下一页（基于用户选择）
+  async generateNextPage(userChoice: string, choiceId: string): Promise<StreamingPage | null> {
+    if (!this.storyPrompt || !this.currentStory) {
+      throw new Error('Story not initialized');
+    }
+
+    const { mainCharacter, mood, setting, theme = '', additionalElements = '' } = this.storyPrompt;
+    const nextPageNumber = this.pages.length + 1;
+
+    // 如果已经是最后一页，不再生成
+    if (nextPageNumber > 5) {
+      this.currentStory.isComplete = true;
+      return null;
+    }
+
+    try {
+      // 构建之前页面的上下文
+      const previousPages = this.pages.map(page => ({
+        text: page.text,
+        userChoice: page.id === this.pages[this.pages.length - 1].id ? userChoice : undefined
+      }));
+
+      // 更新最后一页的用户选择
+      if (previousPages.length > 0) {
+        previousPages[previousPages.length - 1].userChoice = userChoice;
+      }
+
+      this.callbacks.onProgress?.({
+        step: `正在创作第${nextPageNumber}页故事...`,
+        progress: 20 + (nextPageNumber - 1) * 15,
+        currentPage: nextPageNumber,
+        totalPages: 5
+      });
+
+      // 生成下一页内容
+      const pageData = await generateStoryPageWithChoices(
+        mainCharacter,
+        mood,
+        setting || '神奇世界',
+        theme ? theme.split(',') : [],
+        nextPageNumber,
+        previousPages,
+        additionalElements
+      );
+
+      // 创建新页面
+      const newPage: StreamingPage = {
+        id: generatePageId(this.storyId, nextPageNumber),
+        text: pageData.text,
+        background: '',
+        interactiveElements: generateBasicElements(mainCharacter),
+        isReady: false,
+        isGenerating: false,
+        question: pageData.choices.length > 0 && !pageData.isLastPage ? {
+          id: `question_${this.storyId}_${nextPageNumber}`,
+          question: '接下来会发生什么呢？',
+          options: pageData.choices.map((choice, index) => ({
+            id: `choice_${this.storyId}_${nextPageNumber}_${index + 1}`,
+            text: choice.text,
+            emoji: choice.emoji,
+            feedback: choice.description
+          }))
+        } : undefined
+      };
+
+      // 添加到页面列表
+      this.pages.push(newPage);
+      this.currentStory.pages = this.pages;
+
+      // 如果是最后一页，标记完成
+      if (pageData.isLastPage) {
+        this.currentStory.isComplete = true;
+      }
+
+      // 生成这一页的图片
+      await this.generatePageImage(nextPageNumber - 1);
+
+      this.callbacks.onPageReady?.(newPage, nextPageNumber - 1);
+
+      return newPage;
+    } catch (error) {
+      console.error(`Error generating next page:`, error);
+      this.callbacks.onError?.(error as Error, nextPageNumber - 1);
+      throw error;
+    }
+  }
+
   private async startStreamingGeneration(story: StreamingStory) {
     try {
       // 首先生成封面
       await this.generateCoverImage(story);
       
-      // 然后逐页生成图片
-      for (let i = 0; i < this.pages.length; i++) {
-        if (!this.isGenerating) break; // 如果生成被取消，停止
-        
-        await this.generatePageImage(i);
-        
-        // 短暂延迟，避免API限制
-        if (i < this.pages.length - 1) {
-          await delay(1000);
-        }
+      // 生成第一页的图片
+      if (this.pages.length > 0) {
+        await this.generatePageImage(0);
       }
 
-      // 标记生成完成
-      story.isComplete = true;
-      this.callbacks.onComplete?.();
+      // 第一页生成完成，可以开始交互
+      this.callbacks.onProgress?.({
+        step: '第一页已准备好，开始你的冒险吧！',
+        progress: 60,
+        currentPage: 1,
+        totalPages: 5
+      });
+
+      // 注意：不再自动生成所有页面，而是等待用户选择后再生成
     } catch (error) {
       this.callbacks.onError?.(error as Error, -1);
     }
@@ -229,6 +334,11 @@ Story details: ${story.description}`;
       this.callbacks.onError?.(error as Error, pageIndex);
       this.callbacks.onPageReady?.(page, pageIndex);
     }
+  }
+
+  // 获取当前故事
+  getCurrentStory(): StreamingStory | null {
+    return this.currentStory;
   }
 
   // 取消生成

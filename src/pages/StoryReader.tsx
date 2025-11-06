@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Trophy, Star, Loader2, Heart, Sparkles } from 'l
 import { useStorybooksStore, type StreamingStory, type StreamingPage, type QuestionOption } from '@/data/storybooksData';
 import InteractiveElement from '@/components/InteractiveElement';
 import StoryQuestion from '@/components/StoryQuestion';
+import InteractiveChoicePanel, { type ChoiceOption } from '@/components/InteractiveChoicePanel';
 import AudioPlayer from '@/components/AudioPlayer';
 import RewardModal from '@/components/RewardModal';
 
@@ -18,8 +19,10 @@ const StoryReader = () => {
   const [showFinalReward, setShowFinalReward] = useState(false);
   const [storyCompleted, setStoryCompleted] = useState(false);
   const [selectedAnswers, setSelectedAnswers] = useState<{ [pageId: string]: string }>({});
+  const [selectedChoices, setSelectedChoices] = useState<{ [pageId: string]: 'A' | 'B' }>({});
+  const [isGeneratingNextPage, setIsGeneratingNextPage] = useState(false);
 
-  const { getBook, currentStory, isGenerating, generationProgress } = useStorybooksStore();
+  const { getBook, currentStory, isGenerating, generationProgress, generateNextPage, updateStreamingStory } = useStorybooksStore();
   
   // 优先使用流式故事，否则使用普通故事
   const storybook = currentStory || getBook(id || '');
@@ -76,6 +79,95 @@ const StoryReader = () => {
     // 显示反馈
     setRewardMessage(option.feedback);
     setShowReward(true);
+  };
+
+  // 处理交互式选择
+  const handleChoice = async (choice: 'A' | 'B') => {
+    if (!isStreamingStory || !streamingStory || selectedChoices[currentPage.id]) {
+      return;
+    }
+
+    // 记录选择
+    setSelectedChoices(prev => ({
+      ...prev,
+      [currentPage.id]: choice
+    }));
+
+    setIsGeneratingNextPage(true);
+    
+    try {
+      // 生成下一页
+      const updatedStory = await generateNextPage(streamingStory.id, choice);
+      
+      if (updatedStory) {
+        // 更新当前故事
+        updateStreamingStory(updatedStory);
+        
+        // 自动跳转到新页面
+        setTimeout(() => {
+          setCurrentPageIndex(updatedStory.pages.length - 1);
+          setIsGeneratingNextPage(false);
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error generating next page:', error);
+      setIsGeneratingNextPage(false);
+      setRewardMessage('生成下一页时出现了问题，请稍后再试。');
+      setShowReward(true);
+    }
+  };
+
+  // 生成选择选项（基于当前页面内容）
+  const generateChoiceOptions = (): { question: string; optionA: ChoiceOption; optionB: ChoiceOption } => {
+    // 根据故事内容生成简单的选择
+    const defaultOptions = {
+      question: '接下来会发生什么？',
+      optionA: {
+        id: 'A',
+        text: '继续探索',
+        emoji: '🔍'
+      },
+      optionB: {
+        id: 'B',
+        text: '寻找帮助',
+        emoji: '🤝'
+      }
+    };
+
+    // 可以根据页面内容生成更相关的选项
+    if (currentPage.text.includes('门') || currentPage.text.includes('路')) {
+      return {
+        question: '你要选择哪条路？',
+        optionA: {
+          id: 'A',
+          text: '走左边的路',
+          emoji: '⬅️'
+        },
+        optionB: {
+          id: 'B',
+          text: '走右边的路',
+          emoji: '➡️'
+        }
+      };
+    }
+
+    if (currentPage.text.includes('朋友') || currentPage.text.includes('帮助')) {
+      return {
+        question: '你会怎么做？',
+        optionA: {
+          id: 'A',
+          text: '主动帮助',
+          emoji: '💪'
+        },
+        optionB: {
+          id: 'B',
+          text: '谨慎观察',
+          emoji: '👀'
+        }
+      };
+    }
+
+    return defaultOptions;
   };
 
   const handleNextPage = () => {
@@ -237,8 +329,8 @@ const StoryReader = () => {
             </div>
           </div>
 
-          {/* 选择题区域 */}
-          {currentPage.question && (
+          {/* 选择题区域（静态故事） */}
+          {currentPage.question && !isStreamingStory && (
             <div className="p-8 bg-gradient-to-br from-yellow-50 via-orange-50 to-pink-50">
               <div className="max-w-4xl mx-auto">
                 <StoryQuestion
@@ -247,6 +339,40 @@ const StoryReader = () => {
                   onAnswer={handleAnswer}
                   selectedAnswer={selectedAnswers[currentPage.id]}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* 交互式选择面板（流式故事） */}
+          {isStreamingStory && streamingStory && currentPage.isReady && !selectedChoices[currentPage.id] && !isGeneratingNextPage && (
+            <div className="p-8 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+              <div className="max-w-4xl mx-auto">
+                {(() => {
+                  const choices = generateChoiceOptions();
+                  return (
+                    <InteractiveChoicePanel
+                      question={choices.question}
+                      optionA={choices.optionA}
+                      optionB={choices.optionB}
+                      onSelect={handleChoice}
+                      selectedChoice={selectedChoices[currentPage.id]}
+                    />
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* 生成下一页中的提示 */}
+          {isGeneratingNextPage && (
+            <div className="p-8 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+              <div className="max-w-4xl mx-auto text-center">
+                <div className="relative">
+                  <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-purple-500" />
+                  <Sparkles className="absolute -top-2 -right-2 h-6 w-6 text-yellow-400 animate-pulse" />
+                </div>
+                <p className="text-lg font-medium text-gray-600 mb-2">正在根据你的选择创作下一页...</p>
+                <p className="text-sm text-gray-500">请稍候，魔法正在发生</p>
               </div>
             </div>
           )}

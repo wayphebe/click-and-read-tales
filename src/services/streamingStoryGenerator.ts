@@ -1,7 +1,8 @@
 import { generateImage } from './imageGeneration';
-import { generateStoryPages } from './aiService';
+import { generateStoryPages, generateNextStoryPage } from './aiService';
+import { buildPagePrompt } from './promptBuilder';
 import type { StoryPrompt } from '@/components/StoryGeneratorDialog';
-import type { Storybook, StoryPage, InteractiveElement } from '@/data/storybooksData';
+import type { Storybook, StoryPage, InteractiveElement, StreamingStory } from '@/data/storybooksData';
 
 // Helper function to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -34,13 +35,6 @@ export interface StreamingPage extends StoryPage {
   isGenerating: boolean;
 }
 
-// 流式故事接口
-export interface StreamingStory extends Omit<Storybook, 'pages'> {
-  pages: StreamingPage[];
-  isComplete: boolean;
-  currentReadyPage: number;
-}
-
 // 流式生成回调接口
 export interface StreamingCallbacks {
   onPageReady?: (page: StreamingPage, pageIndex: number) => void;
@@ -55,6 +49,7 @@ export class StreamingStoryGenerator {
   private callbacks: StreamingCallbacks;
   private pages: StreamingPage[] = [];
   private isGenerating = false;
+  private storyPrompt: StoryPrompt | null = null;
 
   constructor(callbacks: StreamingCallbacks = {}) {
     this.storyId = generateStoryId();
@@ -63,10 +58,11 @@ export class StreamingStoryGenerator {
 
   async generateStory(prompt: StoryPrompt): Promise<StreamingStory> {
     this.isGenerating = true;
+    this.storyPrompt = prompt;
     const { mainCharacter, mood, setting, theme = '', additionalElements = '' } = prompt;
 
     try {
-      // 1. 立即生成故事文本
+      // 1. 立即生成第一页故事文本
       this.callbacks.onProgress?.({
         step: '正在创作故事内容...',
         progress: 20,
@@ -86,15 +82,16 @@ export class StreamingStoryGenerator {
       const title = `${mainCharacter}的${getSettingTranslation(setting)}冒险`;
       const description = generateDescription(mainCharacter, mood, setting, theme, additionalElements);
 
-      // 3. 创建流式页面
-      this.pages = storyPages.map((text, index) => ({
-        id: generatePageId(this.storyId, index + 1),
-        text,
+      // 3. 只创建第一页（交互式分支故事从第一页开始）
+      const firstPageText = storyPages[0] || '故事开始了...';
+      this.pages = [{
+        id: generatePageId(this.storyId, 1),
+        text: firstPageText,
         background: '', // 空字符串表示图片未生成
         interactiveElements: generateBasicElements(mainCharacter),
         isReady: false,
         isGenerating: false
-      }));
+      }];
 
       const baseStory: StreamingStory = {
         id: this.storyId,
@@ -104,17 +101,18 @@ export class StreamingStoryGenerator {
         description,
         isComplete: false,
         currentReadyPage: 0,
-        pages: this.pages
+        pages: this.pages,
+        userChoices: [] // 初始化用户选择数组
       };
 
       this.callbacks.onProgress?.({
         step: '故事内容已准备好，开始生成插图...',
         progress: 40,
         currentPage: 0,
-        totalPages: this.pages.length + 1 // +1 for cover
+        totalPages: 1 // 只有第一页
       });
 
-      // 4. 开始流式生成图片
+      // 4. 生成封面和第一页图片
       this.startStreamingGeneration(baseStory);
 
       return baseStory;
@@ -124,26 +122,76 @@ export class StreamingStoryGenerator {
     }
   }
 
+  /**
+   * 生成下一页（基于用户选择）
+   * @param story 当前故事
+   * @param choice 用户选择 ('A' 或 'B')
+   * @returns 更新后的故事
+   */
+  async generateNextPage(story: StreamingStory, choice: 'A' | 'B'): Promise<StreamingStory> {
+    if (!this.storyPrompt) {
+      throw new Error('Story prompt not available');
+    }
+
+    try {
+      // 添加用户选择到历史
+      story.userChoices.push(choice);
+
+      const { mainCharacter, mood, setting, theme = '', additionalElements = '' } = this.storyPrompt;
+
+      // 获取之前的页面文本
+      const previousPages = story.pages.map(page => page.text);
+
+      // 生成下一页故事文本
+      this.callbacks.onProgress?.({
+        step: `正在根据你的选择创作下一页...`,
+        progress: 50,
+        currentPage: story.pages.length,
+        totalPages: story.pages.length + 1
+      });
+
+      const nextPageText = await generateNextStoryPage(
+        mainCharacter,
+        mood,
+        setting || '神奇世界',
+        theme ? theme.split(',') : [],
+        previousPages,
+        story.userChoices,
+        choice
+      );
+
+      // 创建新页面
+      const newPage: StreamingPage = {
+        id: generatePageId(this.storyId, story.pages.length + 1),
+        text: nextPageText,
+        background: '',
+        interactiveElements: generateBasicElements(mainCharacter),
+        isReady: false,
+        isGenerating: false
+      };
+
+      story.pages.push(newPage);
+
+      // 生成新页面的图片
+      await this.generatePageImage(story.pages.length - 1, story);
+
+      return story;
+    } catch (error) {
+      console.error('Error generating next page:', error);
+      this.callbacks.onError?.(error as Error, story.pages.length);
+      throw error;
+    }
+  }
+
   private async startStreamingGeneration(story: StreamingStory) {
     try {
       // 首先生成封面
       await this.generateCoverImage(story);
       
-      // 然后逐页生成图片
-      for (let i = 0; i < this.pages.length; i++) {
-        if (!this.isGenerating) break; // 如果生成被取消，停止
-        
-        await this.generatePageImage(i);
-        
-        // 短暂延迟，避免API限制
-        if (i < this.pages.length - 1) {
-          await delay(1000);
-        }
+      // 生成第一页图片
+      if (this.pages.length > 0) {
+        await this.generatePageImage(0, story);
       }
-
-      // 标记生成完成
-      story.isComplete = true;
-      this.callbacks.onComplete?.();
     } catch (error) {
       this.callbacks.onError?.(error as Error, -1);
     }
@@ -182,7 +230,7 @@ Story details: ${story.description}`;
     }
   }
 
-  private async generatePageImage(pageIndex: number) {
+  private async generatePageImage(pageIndex: number, story: StreamingStory) {
     const page = this.pages[pageIndex];
     if (!page) return;
 
@@ -191,7 +239,8 @@ Story details: ${story.description}`;
       page.isGenerating = true;
       this.callbacks.onPageReady?.(page, pageIndex);
 
-      const pagePrompt = `Create a children's book illustration for this scene: "${page.text}". Style requirements:
+      // 使用 promptBuilder 构建包含用户选择的提示词
+      const basePagePrompt = `Create a children's book illustration for this scene: "${page.text}". Style requirements:
 - Match the cover art style: blend of children's art and professional illustration
 - Scene composition: clear focal point with balanced negative space
 - Characters: expressive and endearing, with simple but distinctive features
@@ -201,6 +250,8 @@ Story details: ${story.description}`;
 - Texture: soft watercolor effects with clean linework
 - Mood: maintain story continuity while expressing the scene's emotion
 - Lighting: soft and warm, emphasizing important story elements`;
+
+      const pagePrompt = buildPagePrompt(basePagePrompt, story.userChoices);
 
       page.background = await generateImage({ 
         prompt: pagePrompt,
@@ -215,9 +266,9 @@ Story details: ${story.description}`;
 
       this.callbacks.onProgress?.({
         step: `第${pageIndex + 1}页插图绘制完成`,
-        progress: 60 + (pageIndex + 1) * (30 / this.pages.length),
+        progress: 60 + (pageIndex + 1) * (30 / Math.max(story.pages.length, 1)),
         currentPage: pageIndex + 2, // +2 because cover is page 1
-        totalPages: this.pages.length + 1
+        totalPages: story.pages.length + 1
       });
 
       this.callbacks.onPageReady?.(page, pageIndex);

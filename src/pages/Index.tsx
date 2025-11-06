@@ -35,7 +35,8 @@ const Index = () => {
     startStreamingGeneration,
     updateStreamingStory,
     setGenerationProgress: setStoreProgress,
-    setGenerating: setStoreGenerating
+    setGenerating: setStoreGenerating,
+    setGenerator
   } = useStorybooksStore();
 
   const filteredBooks = selectedCategory === '全部' 
@@ -124,6 +125,9 @@ const Index = () => {
       // 更新状态管理
       updateStreamingStory(streamingStory);
       setStoreGenerating(true);
+      
+      // 存储生成器实例
+      setGenerator(streamingStory.id, generator);
       
       // 立即跳转到阅读页面
       setShowGenerator(false);

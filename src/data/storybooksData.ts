@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { generateStory, StoryGenerationRequest } from '../services/storyGeneration';
+import { StreamingStoryGenerator } from '../services/streamingStoryGenerator';
 
 export interface Storybook {
   id: string;
@@ -29,6 +30,7 @@ export interface StreamingStory extends Omit<Storybook, 'pages'> {
   pages: StreamingPage[];
   isComplete: boolean;
   currentReadyPage: number;
+  userChoices: string[]; // 追踪用户的所有选择
 }
 
 // 故事问题接口
@@ -506,6 +508,11 @@ interface StorybooksStore extends StreamingGenerationState {
   updateStreamingStory: (story: StreamingStory) => void;
   setGenerationProgress: (progress: StreamingGenerationState['generationProgress']) => void;
   setGenerating: (isGenerating: boolean) => void;
+  // 生成器实例管理
+  generatorInstances: Map<string, StreamingStoryGenerator>;
+  setGenerator: (storyId: string, generator: StreamingStoryGenerator) => void;
+  getGenerator: (storyId: string) => StreamingStoryGenerator | undefined;
+  generateNextPage: (storyId: string, choice: 'A' | 'B') => Promise<StreamingStory | null>;
 }
 
 export const useStorybooksStore = create<StorybooksStore>((set, get) => ({
@@ -518,6 +525,7 @@ export const useStorybooksStore = create<StorybooksStore>((set, get) => ({
     currentPage: 0,
     totalPages: 0
   },
+  generatorInstances: new Map(),
   addBook: (book) => set((state) => ({ books: [book, ...state.books] })),
   getBook: (id) => get().books.find(book => book.id === id),
   generateNewStory: async (request) => {
@@ -551,5 +559,32 @@ export const useStorybooksStore = create<StorybooksStore>((set, get) => ({
   },
   setGenerating: (isGenerating) => {
     set({ isGenerating });
+  },
+  // 生成器实例管理
+  setGenerator: (storyId, generator) => {
+    const instances = new Map(get().generatorInstances);
+    instances.set(storyId, generator);
+    set({ generatorInstances: instances });
+  },
+  getGenerator: (storyId) => {
+    return get().generatorInstances.get(storyId);
+  },
+  generateNextPage: async (storyId, choice) => {
+    const generator = get().generatorInstances.get(storyId);
+    const story = get().currentStory;
+    
+    if (!generator || !story || story.id !== storyId) {
+      console.error('Generator or story not found');
+      return null;
+    }
+
+    try {
+      const updatedStory = await generator.generateNextPage(story, choice);
+      set({ currentStory: updatedStory });
+      return updatedStory;
+    } catch (error) {
+      console.error('Error generating next page:', error);
+      return null;
+    }
   }
 }));

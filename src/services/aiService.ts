@@ -213,4 +213,84 @@ ${themes.length > 0 ? `我们可以聊聊${themes.join('、')}。` : ''}
     console.error('Error generating story pages:', error);
     throw error;
   }
+}
+
+/**
+ * 生成下一页故事内容（基于用户选择）
+ * @param character 主角
+ * @param mood 情绪
+ * @param setting 场景
+ * @param themes 主题
+ * @param previousPages 之前的页面文本
+ * @param userChoices 用户选择历史
+ * @param choice 当前选择（'A' 或 'B'）
+ * @returns 下一页的故事文本
+ */
+export async function generateNextStoryPage(
+  character: string,
+  mood: string,
+  setting: string,
+  themes: string[],
+  previousPages: string[],
+  userChoices: string[],
+  choice: 'A' | 'B'
+): Promise<string> {
+  const systemPrompt = `想象你正坐在一个温暖的小房间里，周围围着一群好奇的小朋友。你正在讲一个互动分支故事，每个选择都会影响故事的走向。
+
+你要根据用户的选择继续讲述故事的下一个场景。
+
+记住：
+- 故事必须自然地延续前面的情节
+- 要尊重用户的选择，让选择有意义地影响故事
+- 用简单的语言，让画面在心里展开
+- 每个场景只描述一个画面和一个情节
+- 用温暖的语气讲述
+- 只用中文，不要使用英文`;
+
+  const choiceHistory = userChoices
+    .map((c, i) => `第${i + 1}次选择: ${c}`)
+    .join('\n');
+
+  const userPrompt = `让我们继续讲关于${character}的故事。
+
+前面的故事：
+${previousPages.map((page, i) => `第${i + 1}页: ${page}`).join('\n')}
+
+用户的选择历史：
+${choiceHistory}
+
+当前选择: ${choice}
+
+请根据用户的选择，自然地延续故事，生成下一个场景的内容。场景应该：
+- 与前面的故事连贯
+- 体现用户选择的影响
+- 简短自然（1-2句话）
+- 描述一个清晰的画面
+
+直接输出场景内容，不要添加任何标记或分隔符。`;
+
+  try {
+    const messages: Message[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ];
+
+    const storyContent = await callLLMAPI(messages);
+    console.log('Next page LLM Response:', storyContent);
+
+    // 清理内容，移除可能的标记
+    let pageText = storyContent.trim();
+    // 移除可能的场景分隔符
+    pageText = pageText.replace(/^---\s*/, '').replace(/\s*---$/, '');
+    
+    // 确保以句号结尾
+    if (!pageText.endsWith('。') && !pageText.endsWith('！') && !pageText.endsWith('？')) {
+      pageText += '。';
+    }
+
+    return pageText;
+  } catch (error) {
+    console.error('Error generating next story page:', error);
+    throw error;
+  }
 } 

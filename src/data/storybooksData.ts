@@ -499,8 +499,11 @@ const defaultStorybooks: Storybook[] = [
 
 interface StorybooksStore extends StreamingGenerationState {
   books: Storybook[];
+  loading: boolean;
+  error: string | null;
   addBook: (book: Storybook) => void;
   getBook: (id: string) => Storybook | undefined;
+  loadBooks: (userId?: string) => Promise<void>;
   generateNewStory: (request: StoryGenerationRequest) => Promise<Storybook>;
   // 流式生成相关方法
   startStreamingGeneration: (prompt: any) => Promise<void>;
@@ -514,7 +517,9 @@ interface StorybooksStore extends StreamingGenerationState {
 }
 
 export const useStorybooksStore = create<StorybooksStore>((set, get) => ({
-  books: defaultStorybooks,
+  books: [],
+  loading: false,
+  error: null,
   isGenerating: false,
   currentStory: null,
   generationProgress: {
@@ -526,6 +531,22 @@ export const useStorybooksStore = create<StorybooksStore>((set, get) => ({
   currentGenerator: null,
   addBook: (book) => set((state) => ({ books: [book, ...state.books] })),
   getBook: (id) => get().books.find(book => book.id === id),
+  loadBooks: async (userId) => {
+    set({ loading: true, error: null });
+    try {
+      const { fetchAllStories } = await import('../services/storyService');
+      const stories = await fetchAllStories(userId);
+      set({ books: stories, loading: false });
+    } catch (error: any) {
+      console.error('Error loading books:', error);
+      set({ 
+        error: error.message || '加载故事失败', 
+        loading: false,
+        // 如果加载失败，使用默认故事作为后备
+        books: defaultStorybooks
+      });
+    }
+  },
   generateNewStory: async (request) => {
     set({ isGenerating: true });
     try {

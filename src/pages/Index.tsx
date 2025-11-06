@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Heart, User, Star, Wand2 } from 'lucide-react';
+import { Sparkles, Heart, User, Star, Wand2, Loader2 } from 'lucide-react';
 import BookCard from '@/components/BookCard';
 import CategoryFilter from '@/components/CategoryFilter';
 import StoryGeneratorDialog from '@/components/StoryGeneratorDialog';
@@ -9,6 +9,9 @@ import type { StoryPrompt } from '@/components/StoryGeneratorDialog';
 import { generateStory } from '@/services/storyGenerator';
 import { StreamingStoryGenerator } from '@/services/streamingStoryGenerator';
 import { useToast } from '@/components/ui/use-toast';
+import { useUserStore } from '@/store/useUserStore';
+import { saveStory } from '@/services/storyService';
+import { logUserEvent } from '@/services/eventService';
 
 interface GenerationProgress {
   step: string;
@@ -20,6 +23,7 @@ interface GenerationProgress {
 const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useUserStore();
   const [selectedCategory, setSelectedCategory] = useState('全部');
   const [collectedBooks, setCollectedBooks] = useState<Set<string>>(new Set());
   const [showGenerator, setShowGenerator] = useState(false);
@@ -31,13 +35,22 @@ const Index = () => {
   
   const { 
     books, 
-    addBook, 
+    loading,
+    addBook,
+    loadBooks,
     startStreamingGeneration,
     updateStreamingStory,
     setGenerationProgress: setStoreProgress,
     setGenerating: setStoreGenerating,
     setGenerator
   } = useStorybooksStore();
+
+  // 加载故事列表
+  useEffect(() => {
+    if (user) {
+      loadBooks(user.id);
+    }
+  }, [user, loadBooks]);
 
   const filteredBooks = selectedCategory === '全部' 
     ? books
@@ -48,7 +61,10 @@ const Index = () => {
     navigate(`/story/${randomBook.id}`);
   };
 
-  const handleReadBook = (bookId: string) => {
+  const handleReadBook = async (bookId: string) => {
+    if (user) {
+      await logUserEvent(user.id, 'story_view', { story_id: bookId });
+    }
     navigate(`/story/${bookId}`);
   };
 
@@ -129,9 +145,38 @@ const Index = () => {
       updateStreamingStory(streamingStory);
       setStoreGenerating(true);
       
+      // 保存到 Supabase（如果用户已登录）
+      let savedStreamingId: string | null = null;
+      if (user) {
+        try {
+          // 将流式故事转换为普通故事格式保存
+          const storyToSave = {
+            // 让数据库生成 UUID，不传递前端生成的 id
+            title: streamingStory.title,
+            cover: streamingStory.cover,
+            category: streamingStory.category,
+            description: streamingStory.description,
+            pages: streamingStory.pages.map((page: any) => ({
+              id: page.id,
+              background: page.background,
+              text: page.text,
+              interactiveElements: page.interactiveElements || [],
+              question: page.question
+            }))
+          } as any;
+          
+          const savedStory = await saveStory(storyToSave, user.id);
+          savedStreamingId = savedStory.id;
+          await logUserEvent(user.id, 'story_generate', { story_id: savedStory.id });
+        } catch (error) {
+          console.error('Error saving streaming story:', error);
+          // 不阻止用户继续使用，静默失败
+        }
+      }
+      
       // 立即跳转到阅读页面
       setShowGenerator(false);
-      navigate(`/story/${streamingStory.id}`);
+      navigate(`/story/${savedStreamingId || streamingStory.id}`);
       
       toast({
         title: "故事内容已准备好！",
@@ -151,6 +196,15 @@ const Index = () => {
   };
 
   const handleTraditionalGeneration = async (prompt: StoryPrompt) => {
+    if (!user) {
+      toast({
+        title: "请先登录",
+        description: "生成故事需要登录",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsGenerating(true);
     setGenerationProgress({ step: '正在构思故事...', progress: 0 });
     
@@ -165,22 +219,28 @@ const Index = () => {
       // 3. 生成插图
       setGenerationProgress({ step: '正在为故事绘制插图...', progress: 60 });
       
-      // 4. 最终处理
-      setGenerationProgress({ step: '正在完成最后的润色...', progress: 80 });
+      // 4. 保存到 Supabase
+      setGenerationProgress({ step: '正在保存故事...', progress: 80 });
+      const savedStory = await saveStory(newStory, user.id);
       
-      addBook(newStory);
+      // 5. 记录事件
+      await logUserEvent(user.id, 'story_generate', { story_id: savedStory.id });
+      
+      // 6. 更新本地状态
+      addBook(savedStory);
       setShowGenerator(false);
       setGenerationProgress({ step: '创作完成！', progress: 100 });
       
       toast({
         title: "故事生成成功！",
-        description: `《${newStory.title}》已经准备好啦，快来阅读吧！`,
+        description: `《${savedStory.title}》已经准备好啦，快来阅读吧！`,
       });
-      navigate(`/story/${newStory.id}`);
-    } catch (error) {
+      navigate(`/story/${savedStory.id}`);
+    } catch (error: any) {
+      console.error('Error generating story:', error);
       toast({
         title: "生成故事失败",
-        description: "抱歉，生成故事时出现了问题，请稍后再试。",
+        description: error.message || "抱歉，生成故事时出现了问题，请稍后再试。",
         variant: "destructive",
       });
     } finally {
@@ -251,18 +311,28 @@ const Index = () => {
             </button>
           </div>
 
+          {/* 加载状态 */}
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+              <span className="ml-2 text-gray-600">加载故事中...</span>
+            </div>
+          )}
+
           {/* 故事列表 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredBooks.map((book) => (
-              <BookCard
-                key={book.id}
-                book={book}
-                onRead={() => handleReadBook(book.id)}
-                onToggleCollect={() => handleToggleCollect(book.id)}
-                isCollected={collectedBooks.has(book.id)}
-              />
-            ))}
-          </div>
+          {!loading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredBooks.map((book) => (
+                <BookCard
+                  key={book.id}
+                  book={book}
+                  onRead={() => handleReadBook(book.id)}
+                  onToggleCollect={() => handleToggleCollect(book.id)}
+                  isCollected={collectedBooks.has(book.id)}
+                />
+              ))}
+            </div>
+          )}
 
           {/* 空状态 */}
           {filteredBooks.length === 0 && (

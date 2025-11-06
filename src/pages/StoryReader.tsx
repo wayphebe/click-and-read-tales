@@ -7,11 +7,15 @@ import StoryQuestion from '@/components/StoryQuestion';
 import AudioPlayer from '@/components/AudioPlayer';
 import RewardModal from '@/components/RewardModal';
 import { useToast } from '@/components/ui/use-toast';
+import { useUserStore } from '@/store/useUserStore';
+import { fetchStoryById } from '@/services/storyService';
+import { logUserEvent } from '@/services/eventService';
 
 const StoryReader = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useUserStore();
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showReward, setShowReward] = useState(false);
@@ -21,18 +25,75 @@ const StoryReader = () => {
   const [storyCompleted, setStoryCompleted] = useState(false);
   const [selectedAnswers, setSelectedAnswers] = useState<{ [pageId: string]: string }>({});
   const [isGeneratingNextPage, setIsGeneratingNextPage] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const { getBook, currentStory, isGenerating, generationProgress, getGenerator, updateStreamingStory, setGenerationProgress } = useStorybooksStore();
-  
-  // 优先使用流式故事，否则使用普通故事
-  const storybook = currentStory || getBook(id || '');
+  const { getBook, currentStory, isGenerating, generationProgress, getGenerator, updateStreamingStory, setGenerationProgress, addBook } = useStorybooksStore();
+  const [storybook, setStorybook] = useState(currentStory || getBook(id || '') || null);
+
+  // 从数据库加载故事（如果不是流式故事且不在 store 中）
+  useEffect(() => {
+    const loadStory = async () => {
+      if (!id) {
+        navigate('/');
+        return;
+      }
+
+      // 如果是流式故事，不需要从数据库加载
+      if (currentStory && currentStory.id === id) {
+        setStorybook(currentStory);
+        setLoading(false);
+        return;
+      }
+
+      // 如果 store 中有，不需要加载
+      const existingStory = getBook(id);
+      if (existingStory) {
+        setStorybook(existingStory);
+        setLoading(false);
+        return;
+      }
+
+      // 从数据库加载
+      try {
+        setLoading(true);
+        const story = await fetchStoryById(id);
+        if (story) {
+          // 添加到 store
+          addBook(story);
+          setStorybook(story);
+        } else {
+          navigate('/');
+          return;
+        }
+      } catch (error) {
+        console.error('Error loading story:', error);
+        toast({
+          title: "加载失败",
+          description: "无法加载故事，请稍后再试",
+          variant: "destructive",
+        });
+        navigate('/');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadStory();
+  }, [id, navigate, currentStory, getBook, addBook, toast]);
+
+  // 记录故事开始事件
+  useEffect(() => {
+    if (storybook && user && currentPageIndex === 0) {
+      logUserEvent(user.id, 'story_start', { story_id: storybook.id });
+    }
+  }, [storybook, user, currentPageIndex]);
 
   useEffect(() => {
-    if (!storybook) {
+    if (!storybook && !loading) {
       navigate('/');
       return;
     }
-  }, [storybook, navigate]);
+  }, [storybook, loading, navigate]);
 
   // 键盘导航支持
   useEffect(() => {
@@ -49,6 +110,17 @@ const StoryReader = () => {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [currentPageIndex, storybook]);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-magical-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-purple-600 mx-auto mb-4" />
+          <p className="text-gray-600">加载故事中...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!storybook) {
     return null;
   }
@@ -62,11 +134,21 @@ const StoryReader = () => {
   const totalPages = storybook.pages.length;
   const progress = ((currentPageIndex + 1) / totalPages) * 100;
 
-  const handleInteraction = (elementId: string, reward: string) => {
+  const handleInteraction = async (elementId: string, reward: string) => {
     if (!interactedElements.has(elementId)) {
       setInteractedElements(prev => new Set([...prev, elementId]));
       setRewardMessage(reward);
       setShowReward(true);
+      
+      // 记录交互事件
+      if (user && storybook) {
+        await logUserEvent(user.id, 'interactive_click', {
+          story_id: storybook.id,
+          page_id: currentPage?.id,
+          page_number: currentPageIndex + 1,
+          element_id: elementId
+        });
+      }
     }
   };
 
@@ -78,6 +160,18 @@ const StoryReader = () => {
       ...prev,
       [currentPage.id]: option.id
     }));
+    
+    // 记录回答事件
+    if (user) {
+      await logUserEvent(user.id, 'question_answer', {
+        story_id: storybook.id,
+        page_id: currentPage.id,
+        page_number: currentPageIndex + 1,
+        question_id: currentPage.question?.id,
+        answer_id: option.id,
+        answer_correct: option.isCorrect
+      });
+    }
     
     // 显示反馈
     setRewardMessage(option.feedback);
@@ -146,23 +240,50 @@ const StoryReader = () => {
     }
   };
 
-  const handleNextPage = () => {
+  const handleNextPage = async () => {
     // 如果正在生成下一页，不允许翻页
     if (isGeneratingNextPage) {
       return;
     }
     
     if (!isLastPage) {
-      setCurrentPageIndex(prev => prev + 1);
+      const newIndex = currentPageIndex + 1;
+      setCurrentPageIndex(newIndex);
+      
+      // 记录翻页事件
+      if (user && storybook) {
+        await logUserEvent(user.id, 'page_turn', {
+          story_id: storybook.id,
+          page_id: storybook.pages[newIndex]?.id,
+          page_number: newIndex + 1
+        });
+      }
     } else if (!storyCompleted) {
       setStoryCompleted(true);
       setShowFinalReward(true);
+      
+      // 记录完成事件
+      if (user && storybook) {
+        await logUserEvent(user.id, 'story_complete', {
+          story_id: storybook.id
+        });
+      }
     }
   };
 
-  const handlePrevPage = () => {
+  const handlePrevPage = async () => {
     if (!isFirstPage) {
-      setCurrentPageIndex(prev => prev - 1);
+      const newIndex = currentPageIndex - 1;
+      setCurrentPageIndex(newIndex);
+      
+      // 记录翻页事件
+      if (user && storybook) {
+        await logUserEvent(user.id, 'page_turn', {
+          story_id: storybook.id,
+          page_id: storybook.pages[newIndex]?.id,
+          page_number: newIndex + 1
+        });
+      }
     }
   };
 

@@ -1,5 +1,6 @@
 import { generateImage } from './imageGeneration';
 import { generateStoryPages, generateStoryPageWithChoices } from './aiService';
+import { extractVocabularyFromText, getEmojiForWord } from './vocabularyExtractor';
 import type { StoryPrompt } from '@/components/StoryGeneratorDialog';
 import type { Storybook, StoryPage, InteractiveElement, StoryQuestion, QuestionOption } from '@/data/storybooksData';
 
@@ -74,7 +75,7 @@ export class StreamingStoryGenerator {
         step: '正在创作第一页故事...',
         progress: 20,
         currentPage: 1,
-        totalPages: 5
+        totalPages: 6
       });
 
       const firstPageData = await generateStoryPageWithChoices(
@@ -92,17 +93,45 @@ export class StreamingStoryGenerator {
       const description = generateDescription(mainCharacter, mood, setting, theme, additionalElements);
 
       // 3. 创建第一页（带选择项）
+      console.log('[generateStory] ====== 创建第一页 ======');
+      console.log('[generateStory] 第一页数据对象:', firstPageData);
+      console.log('[generateStory] 第一页数据 (JSON):', JSON.stringify(firstPageData, null, 2));
+      console.log('[generateStory] 选择项数量:', firstPageData.choices.length);
+      console.log('[generateStory] 是否最后一页:', firstPageData.isLastPage);
+      console.log('[generateStory] 选择项详情:', JSON.stringify(firstPageData.choices, null, 2));
+      
+      // 确保第一页始终有问题选项（除非明确是最后一页）
+      // 如果解析失败导致没有选择项，使用默认选择项
+      let choicesToUse = firstPageData.choices;
+      if (choicesToUse.length === 0 && !firstPageData.isLastPage) {
+        console.warn('[generateStory] 第一页没有选择项，使用默认选择项');
+        choicesToUse = [
+          { text: '继续前进', emoji: '🚀', description: '勇敢地继续前进' },
+          { text: '停下来看看', emoji: '🔍', description: '停下来仔细观察' }
+        ];
+      }
+      
+      const shouldHaveQuestion = !firstPageData.isLastPage && choicesToUse.length > 0;
+      
+      // 生成带词汇的交互元素
+      const pageId = generatePageId(this.storyId, 1);
+      const interactiveElements = await generateVocabularyElements(
+        firstPageData.text,
+        pageId,
+        1
+      );
+      
       const firstPage: StreamingPage = {
-        id: generatePageId(this.storyId, 1),
+        id: pageId,
         text: firstPageData.text,
         background: '', // 图片将在后台生成
-        interactiveElements: generateBasicElements(mainCharacter),
+        interactiveElements,
         isReady: false,
         isGenerating: false,
-        question: firstPageData.choices.length > 0 ? {
+        question: shouldHaveQuestion ? {
           id: `question_${this.storyId}_1`,
           question: '接下来会发生什么呢？',
-          options: firstPageData.choices.map((choice, index) => ({
+          options: choicesToUse.map((choice, index) => ({
             id: `choice_${this.storyId}_1_${index + 1}`,
             text: choice.text,
             emoji: choice.emoji,
@@ -110,8 +139,43 @@ export class StreamingStoryGenerator {
           }))
         } : undefined
       };
+      
+      console.log('[generateStory] ====== 第一页创建完成 ======');
+      console.log('[generateStory] 第一页对象:', firstPage);
+      console.log('[generateStory] 第一页 (JSON):', JSON.stringify(firstPage, null, 2));
+      console.log('[generateStory] 第一页 question 对象:', firstPage.question);
+      console.log('[generateStory] 第一页 question (JSON):', JSON.stringify(firstPage.question, null, 2));
+      console.log('[generateStory] 第一页 question options 数量:', firstPage.question?.options.length || 0);
+      console.log('[generateStory] 第一页 question options 详情:', JSON.stringify(firstPage.question?.options, null, 2));
+      
+      // 如果第一页仍然没有问题选项，强制添加（这是最后的保障）
+      if (!firstPage.question && !firstPageData.isLastPage) {
+        console.error('[generateStory] ⚠️⚠️⚠️ 第一页没有生成问题选项！强制添加默认问题选项 ⚠️⚠️⚠️');
+        firstPage.question = {
+          id: `question_${this.storyId}_1`,
+          question: '接下来会发生什么呢？',
+          options: [
+            {
+              id: `choice_${this.storyId}_1_1`,
+              text: '继续前进',
+              emoji: '🚀',
+              feedback: '勇敢地继续前进'
+            },
+            {
+              id: `choice_${this.storyId}_1_2`,
+              text: '停下来看看',
+              emoji: '🔍',
+              feedback: '停下来仔细观察'
+            }
+          ]
+        };
+        console.log('[generateStory] 已添加默认问题选项:', firstPage.question);
+      }
 
       this.pages = [firstPage];
+      console.log('[generateStory] ====== 创建基础故事结构 ======');
+      console.log('[generateStory] Pages 数组:', this.pages);
+      console.log('[generateStory] Pages 数组 (JSON):', JSON.stringify(this.pages, null, 2));
 
       const baseStory: StreamingStory = {
         id: this.storyId,
@@ -125,12 +189,17 @@ export class StreamingStoryGenerator {
       };
 
       this.currentStory = baseStory;
+      console.log('[generateStory] ====== 基础故事结构创建完成 ======');
+      console.log('[generateStory] baseStory 对象:', baseStory);
+      console.log('[generateStory] baseStory (JSON):', JSON.stringify(baseStory, null, 2));
+      console.log('[generateStory] baseStory.pages[0].question:', baseStory.pages[0]?.question);
+      console.log('[generateStory] baseStory.pages[0].question (JSON):', JSON.stringify(baseStory.pages[0]?.question, null, 2));
 
       this.callbacks.onProgress?.({
         step: '第一页故事内容已准备好，开始生成封面和插图...',
         progress: 40,
         currentPage: 1,
-        totalPages: 5
+        totalPages: 6
       });
 
       // 4. 开始流式生成封面和第一页图片
@@ -152,8 +221,8 @@ export class StreamingStoryGenerator {
     const { mainCharacter, mood, setting, theme = '', additionalElements = '' } = this.storyPrompt;
     const nextPageNumber = this.pages.length + 1;
 
-    // 如果已经是最后一页，不再生成
-    if (nextPageNumber > 5) {
+    // 如果已经是最后一页，不再生成（支持6-7页）
+    if (nextPageNumber > 6) {
       this.currentStory.isComplete = true;
       return null;
     }
@@ -174,7 +243,7 @@ export class StreamingStoryGenerator {
         step: `正在创作第${nextPageNumber}页故事...`,
         progress: 20 + (nextPageNumber - 1) * 15,
         currentPage: nextPageNumber,
-        totalPages: 5
+        totalPages: 6
       });
 
       // 生成下一页内容
@@ -188,12 +257,20 @@ export class StreamingStoryGenerator {
         additionalElements
       );
 
+      // 生成带词汇的交互元素
+      const pageId = generatePageId(this.storyId, nextPageNumber);
+      const interactiveElements = await generateVocabularyElements(
+        pageData.text,
+        pageId,
+        nextPageNumber
+      );
+      
       // 创建新页面
       const newPage: StreamingPage = {
-        id: generatePageId(this.storyId, nextPageNumber),
+        id: pageId,
         text: pageData.text,
         background: '',
-        interactiveElements: generateBasicElements(mainCharacter),
+        interactiveElements,
         isReady: false,
         isGenerating: false,
         question: pageData.choices.length > 0 && !pageData.isLastPage ? {
@@ -245,7 +322,7 @@ export class StreamingStoryGenerator {
         step: '第一页已准备好，开始你的冒险吧！',
         progress: 60,
         currentPage: 1,
-        totalPages: 5
+        totalPages: 6
       });
 
       // 注意：不再自动生成所有页面，而是等待用户选择后再生成
@@ -282,8 +359,17 @@ Story details: ${story.description}`;
       });
     } catch (error) {
       console.error('Error generating cover image:', error);
-      story.cover = '/placeholder.svg'; // 使用占位符
+      // 使用占位符作为降级策略
+      story.cover = '/placeholder.svg';
+      // 通知错误，但不阻止故事继续生成
       this.callbacks.onError?.(error as Error, -1);
+      // 继续执行，不中断故事生成流程
+      this.callbacks.onProgress?.({
+        step: '封面生成失败，使用默认图片，故事内容正常',
+        progress: 50,
+        currentPage: 1,
+        totalPages: this.pages.length + 1
+      });
     }
   }
 
@@ -328,10 +414,19 @@ Story details: ${story.description}`;
       this.callbacks.onPageReady?.(page, pageIndex);
     } catch (error) {
       console.error(`Error generating image for page ${pageIndex + 1}:`, error);
-      page.background = '/placeholder.svg'; // 使用占位符
+      // 使用占位符作为降级策略
+      page.background = '/placeholder.svg';
       page.isReady = true;
       page.isGenerating = false;
+      // 通知错误，但不阻止故事继续
       this.callbacks.onError?.(error as Error, pageIndex);
+      // 更新进度，说明图片生成失败但故事内容正常
+      this.callbacks.onProgress?.({
+        step: `第${pageIndex + 1}页插图生成失败，使用默认图片，故事内容正常`,
+        progress: 60 + (pageIndex + 1) * (30 / this.pages.length),
+        currentPage: pageIndex + 2,
+        totalPages: this.pages.length + 1
+      });
       this.callbacks.onPageReady?.(page, pageIndex);
     }
   }
@@ -405,4 +500,52 @@ function generateBasicElements(mainCharacter: string): InteractiveElement[] {
       reward: '发现了一个神奇的惊喜！'
     }
   ];
+}
+
+/**
+ * 从故事文本生成带词汇的交互元素
+ */
+async function generateVocabularyElements(
+  storyText: string,
+  pageId: string,
+  pageNumber: number
+): Promise<InteractiveElement[]> {
+  try {
+    // 提取词汇
+    const vocabulary = await extractVocabularyFromText(storyText, pageNumber);
+    
+    if (vocabulary.length === 0) {
+      // 如果没有提取到词汇，返回默认元素
+      return generateBasicElements('');
+    }
+
+    // 将词汇转换为交互元素
+    const positions = [
+      { x: 20, y: 30 },  // 左上区域
+      { x: 75, y: 25 },  // 右上区域
+      { x: 15, y: 70 },  // 左下区域
+      { x: 80, y: 75 },  // 右下区域
+      { x: 50, y: 50 },  // 中心区域
+    ];
+
+    return vocabulary.slice(0, 5).map((vocab, index) => ({
+      id: `vocab_${pageId}_${index + 1}`,
+      emoji: getEmojiForWord(vocab.chinese),
+      x: positions[index]?.x || Math.random() * 80 + 10,
+      y: positions[index]?.y || Math.random() * 80 + 10,
+      vocabulary: {
+        chinese: vocab.chinese,
+        english: vocab.english,
+        phonetic: vocab.phonetic,
+        example: vocab.example,
+        exampleChinese: vocab.example?.split('. ')[1] || vocab.exampleChinese,
+        category: vocab.category
+      },
+      reward: `学会了单词：${vocab.english}！`
+    }));
+  } catch (error) {
+    console.error('Error generating vocabulary elements:', error);
+    // 如果出错，返回默认元素
+    return generateBasicElements('');
+  }
 }

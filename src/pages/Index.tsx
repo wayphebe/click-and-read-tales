@@ -136,14 +136,23 @@ const Index = () => {
       });
 
       // 开始流式生成
+      console.log('[Index] ====== 开始流式生成故事 ======');
       const streamingStory = await generator.generateStory(prompt);
+      console.log('[Index] ====== 流式故事生成完成 ======');
+      console.log('[Index] streamingStory 对象:', streamingStory);
+      console.log('[Index] streamingStory (JSON):', JSON.stringify(streamingStory, null, 2));
+      console.log('[Index] streamingStory.pages[0]:', streamingStory.pages[0]);
+      console.log('[Index] streamingStory.pages[0].question:', streamingStory.pages[0]?.question);
+      console.log('[Index] streamingStory.pages[0].question (JSON):', JSON.stringify(streamingStory.pages[0]?.question, null, 2));
       
       // 保存生成器实例到store
       setGenerator(generator);
       
       // 更新状态管理
+      console.log('[Index] ====== 更新 store 中的流式故事 ======');
       updateStreamingStory(streamingStory);
       setStoreGenerating(true);
+      console.log('[Index] store 更新完成');
       
       // 保存到 Supabase（如果用户已登录）
       let savedStreamingId: string | null = null;
@@ -165,8 +174,29 @@ const Index = () => {
             }))
           } as any;
           
+          console.log('[Index] ====== 保存故事到数据库 ======');
+          console.log('[Index] storyToSave 对象:', storyToSave);
+          console.log('[Index] storyToSave.pages[0].question:', storyToSave.pages[0]?.question);
+          console.log('[Index] storyToSave.pages[0].question (JSON):', JSON.stringify(storyToSave.pages[0]?.question, null, 2));
+          
           const savedStory = await saveStory(storyToSave, user.id);
           savedStreamingId = savedStory.id;
+          console.log('[Index] 保存成功，数据库 ID:', savedStreamingId);
+          
+          // 更新 store 中的流式故事，使用数据库的 ID
+          // 这样在 StoryReader 中就能正确匹配了
+          const updatedStreamingStory: StreamingStory = {
+            ...streamingStory,
+            id: savedStory.id
+          };
+          console.log('[Index] ====== 更新 store 中的流式故事（使用数据库 ID） ======');
+          console.log('[Index] updatedStreamingStory 对象:', updatedStreamingStory);
+          console.log('[Index] updatedStreamingStory.pages[0].question:', updatedStreamingStory.pages[0]?.question);
+          console.log('[Index] updatedStreamingStory.pages[0].question (JSON):', JSON.stringify(updatedStreamingStory.pages[0]?.question, null, 2));
+          updateStreamingStory(updatedStreamingStory);
+          addBook(updatedStreamingStory);
+          console.log('[Index] store 更新完成');
+          
           await logUserEvent(user.id, 'story_generate', { story_id: savedStory.id });
         } catch (error) {
           console.error('Error saving streaming story:', error);
@@ -175,6 +205,8 @@ const Index = () => {
       }
       
       // 立即跳转到阅读页面
+      // 优先使用流式故事的原始 ID，这样可以直接从 store 加载
+      // 如果保存成功，使用数据库 ID（但 store 中已经更新了）
       setShowGenerator(false);
       navigate(`/story/${savedStreamingId || streamingStory.id}`);
       

@@ -75,15 +75,38 @@ export const generateImageFast = async ({
       throw new Error('No image generated');
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        if (error.response?.status === 429) {
+        const status = error.response?.status;
+        const responseData = error.response?.data;
+        
+        // 检查是否是重试性错误（429限流或5xx服务器错误）
+        const isRetryableError = status === 429 || (status && status >= 500 && status < 600);
+        
+        if (isRetryableError) {
           if (retryCount === MAX_RETRIES) {
-            throw new Error('达到最大重试次数，图片生成失败。请稍后再试。');
+            const errorMsg = status === 429 
+              ? '达到最大重试次数，图片生成失败。请稍后再试。'
+              : `服务器错误（${status}），已重试${MAX_RETRIES + 1}次仍失败。请稍后再试。`;
+            throw new Error(errorMsg);
           }
           retryCount++;
+          const retryDelay = getRetryDelay(retryCount - 1);
+          console.log(`图片生成失败（状态码: ${status}），将在 ${retryDelay}ms 后重试（第 ${retryCount + 1}/${MAX_RETRIES + 1} 次尝试）`);
           continue;
         }
-        // For other errors, throw immediately
-        throw new Error(`图片生成失败: ${error.response?.data?.message || error.message}`);
+        
+        // 对于非重试性错误，提取错误消息
+        let errorMessage = '未知错误';
+        if (responseData) {
+          // 尝试多种可能的错误消息字段
+          errorMessage = responseData.message || 
+                        responseData.error?.message || 
+                        responseData.error || 
+                        (typeof responseData === 'string' ? responseData : error.message);
+        } else {
+          errorMessage = error.message;
+        }
+        
+        throw new Error(`图片生成失败: ${errorMessage}${status ? ` (HTTP ${status})` : ''}`);
       }
       throw error;
     }
@@ -135,15 +158,38 @@ export const generateImage = async ({
       throw new Error('No image generated');
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        if (error.response?.status === 429) {
+        const status = error.response?.status;
+        const responseData = error.response?.data;
+        
+        // 检查是否是重试性错误（429限流或5xx服务器错误）
+        const isRetryableError = status === 429 || (status && status >= 500 && status < 600);
+        
+        if (isRetryableError) {
           if (retryCount === MAX_RETRIES) {
-            throw new Error('达到最大重试次数，图片生成失败。请稍后再试。');
+            const errorMsg = status === 429 
+              ? '达到最大重试次数，图片生成失败。请稍后再试。'
+              : `服务器错误（${status}），已重试${MAX_RETRIES + 1}次仍失败。请稍后再试。`;
+            throw new Error(errorMsg);
           }
           retryCount++;
+          const retryDelay = getRetryDelay(retryCount - 1);
+          console.log(`图片生成失败（状态码: ${status}），将在 ${retryDelay}ms 后重试（第 ${retryCount + 1}/${MAX_RETRIES + 1} 次尝试）`);
           continue;
         }
-        // For other errors, throw immediately
-        throw new Error(`图片生成失败: ${error.response?.data?.message || error.message}`);
+        
+        // 对于非重试性错误，提取错误消息
+        let errorMessage = '未知错误';
+        if (responseData) {
+          // 尝试多种可能的错误消息字段
+          errorMessage = responseData.message || 
+                        responseData.error?.message || 
+                        responseData.error || 
+                        (typeof responseData === 'string' ? responseData : error.message);
+        } else {
+          errorMessage = error.message;
+        }
+        
+        throw new Error(`图片生成失败: ${errorMessage}${status ? ` (HTTP ${status})` : ''}`);
       }
       throw error;
     }

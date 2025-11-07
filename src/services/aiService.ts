@@ -93,7 +93,7 @@ testLLMAPI().then(success => {
 
 function formatStoryPages(content: string): string[] {
   // 使用场景分隔符分割内容
-  const scenes = content
+  let scenes = content
     .split('---')
     .map(scene => scene.trim())
     .filter(scene => scene.length > 0);
@@ -107,7 +107,7 @@ function formatStoryPages(content: string): string[] {
       .map(s => s + '。');
 
     // 确保每个场景至少有一个完整的句子
-    const scenes = [];
+    const newScenes = [];  // 使用新变量名避免冲突
     let currentScene = [];
     
     for (const sentence of sentences) {
@@ -115,24 +115,36 @@ function formatStoryPages(content: string): string[] {
       
       // 当当前场景有1-2个句子时，形成一个新场景
       if (currentScene.length >= 1 && currentScene.length <= 2) {
-        scenes.push(currentScene.join(''));
+        newScenes.push(currentScene.join(''));
         currentScene = [];
       }
     }
     
     // 处理剩余的句子
     if (currentScene.length > 0) {
-      scenes.push(currentScene.join(''));
+      newScenes.push(currentScene.join(''));
     }
+    
+    scenes = newScenes;  // 更新 scenes 变量
   }
 
-  // 确保正好有6个场景
-  const finalScenes = scenes.slice(0, 6);
-  while (finalScenes.length < 6) {
+  // 支持6-7页：优先6页，如果内容足够可以扩展到7页
+  const minPages = 6;
+  const maxPages = 7;
+  
+  // 如果场景数量在6-7之间，直接使用
+  if (scenes.length >= minPages && scenes.length <= maxPages) {
+    return scenes;
+  }
+  
+  // 如果场景少于6个，补充到6个
+  const finalScenes = scenes.slice(0, maxPages);
+  while (finalScenes.length < minPages) {
     finalScenes.push('继续探索...');
   }
-
-  return finalScenes;
+  
+  // 如果场景多于7个，截取前7个
+  return finalScenes.slice(0, maxPages);
 }
 
 // 页面生成结果接口
@@ -199,9 +211,9 @@ ${pageNumber === 1
   : `这是故事的第${pageNumber}页。${storyContext}`
 }
 
-${pageNumber >= 5 
-  ? '这是故事的最后一页，请给出一个温暖、完整的结局，不需要选择项。'
-  : '请生成这一页的故事内容和2个选择项。'
+${pageNumber >= 6 
+    ? '这是故事的最后一页，请给出一个温暖、完整的结局，不需要选择项。'
+    : '请生成这一页的故事内容和2个选择项。'
 }
 
 请按照指定的格式输出。`;
@@ -212,11 +224,32 @@ ${pageNumber >= 5
       { role: 'user', content: userPrompt }
     ];
 
+    console.log(`[generateStoryPageWithChoices] ====== 开始生成第 ${pageNumber} 页 ======`);
+    console.log(`[generateStoryPageWithChoices] 参数:`, {
+      character,
+      mood,
+      setting,
+      themes,
+      pageNumber,
+      previousPagesCount: previousPages.length,
+      additionalElements
+    });
+    
     const response = await callLLMAPI(messages);
-    console.log('LLM Response for page with choices:', response);
+    console.log(`[generateStoryPageWithChoices] ====== LLM 原始响应 (第 ${pageNumber} 页) ======`);
+    console.log(`[generateStoryPageWithChoices] 响应长度:`, response.length);
+    console.log(`[generateStoryPageWithChoices] 完整响应:`, response);
+    console.log(`[generateStoryPageWithChoices] 响应前500字符:`, response.substring(0, 500));
 
     // 解析响应
+    console.log(`[generateStoryPageWithChoices] ====== 开始解析响应 (第 ${pageNumber} 页) ======`);
     const result = parseStoryPageWithChoices(response, pageNumber);
+    console.log(`[generateStoryPageWithChoices] ====== 解析结果 (第 ${pageNumber} 页) ======`);
+    console.log(`[generateStoryPageWithChoices] 故事文本:`, result.text);
+    console.log(`[generateStoryPageWithChoices] 选择项数量:`, result.choices.length);
+    console.log(`[generateStoryPageWithChoices] 选择项详情:`, JSON.stringify(result.choices, null, 2));
+    console.log(`[generateStoryPageWithChoices] 是否最后一页:`, result.isLastPage);
+    console.log(`[generateStoryPageWithChoices] ====== 解析完成 (第 ${pageNumber} 页) ======`);
     return result;
   } catch (error) {
     console.error('Error generating story page with choices:', error);
@@ -226,13 +259,18 @@ ${pageNumber >= 5
 
 // 解析包含选择项的故事页面
 function parseStoryPageWithChoices(content: string, pageNumber: number): StoryPageWithChoices {
+  console.log(`[parseStoryPageWithChoices] Page ${pageNumber} - Content length:`, content.length);
+  console.log(`[parseStoryPageWithChoices] Raw content:`, content.substring(0, 500));
+  
   // 提取故事文本
   const storyMatch = content.match(/STORY_TEXT:\s*(.+?)(?=CHOICE_|IS_LAST|$)/s);
   const storyText = storyMatch ? storyMatch[1].trim() : '故事继续...';
+  console.log(`[parseStoryPageWithChoices] Extracted story text:`, storyText);
 
-  // 检查是否是最后一页
+  // 检查是否是最后一页（支持6-7页）
   const isLastMatch = content.match(/IS_LAST:\s*(true|false)/i);
-  const isLastPage = isLastMatch ? isLastMatch[1].toLowerCase() === 'true' : pageNumber >= 5;
+  const isLastPage = isLastMatch ? isLastMatch[1].toLowerCase() === 'true' : pageNumber >= 6;
+  console.log(`[parseStoryPageWithChoices] Is last page:`, isLastPage, `(pageNumber: ${pageNumber})`);
 
   // 如果是最后一页，不提取选择项
   if (isLastPage) {
@@ -243,37 +281,83 @@ function parseStoryPageWithChoices(content: string, pageNumber: number): StoryPa
     };
   }
 
-  // 提取选择项
+  // 提取选择项 - 使用多种格式匹配以提高容错性
   const choices: { text: string; emoji: string; description: string }[] = [];
   
-  const choice1Match = content.match(/CHOICE_1:\s*(.+?)(?=CHOICE_2|IS_LAST|$)/s);
-  const choice2Match = content.match(/CHOICE_2:\s*(.+?)(?=IS_LAST|$)/s);
+  // 尝试多种格式匹配
+  const choice1Patterns = [
+    /CHOICE_1:\s*(.+?)(?=CHOICE_2|IS_LAST|$)/s,
+    /CHOICE1[：:]\s*(.+?)(?=CHOICE2|IS_LAST|$)/s,
+    /选择1[：:]\s*(.+?)(?=选择2|IS_LAST|$)/s,
+    /选项1[：:]\s*(.+?)(?=选项2|IS_LAST|$)/s,
+  ];
+  
+  const choice2Patterns = [
+    /CHOICE_2:\s*(.+?)(?=IS_LAST|$)/s,
+    /CHOICE2[：:]\s*(.+?)(?=IS_LAST|$)/s,
+    /选择2[：:]\s*(.+?)(?=IS_LAST|$)/s,
+    /选项2[：:]\s*(.+?)(?=IS_LAST|$)/s,
+  ];
+
+  let choice1Match = null;
+  let choice2Match = null;
+
+  // 尝试匹配第一个选择项
+  for (const pattern of choice1Patterns) {
+    choice1Match = content.match(pattern);
+    if (choice1Match) {
+      console.log(`[parseStoryPageWithChoices] Found CHOICE_1 with pattern:`, pattern);
+      break;
+    }
+  }
+
+  // 尝试匹配第二个选择项
+  for (const pattern of choice2Patterns) {
+    choice2Match = content.match(pattern);
+    if (choice2Match) {
+      console.log(`[parseStoryPageWithChoices] Found CHOICE_2 with pattern:`, pattern);
+      break;
+    }
+  }
 
   if (choice1Match) {
     const choice1Parts = choice1Match[1].trim().split('|').map(s => s.trim());
-    choices.push({
+    const choice1 = {
       text: choice1Parts[0] || '选择1',
       emoji: choice1Parts[1] || '✨',
       description: choice1Parts[2] || '继续探索'
-    });
+    };
+    choices.push(choice1);
+    console.log(`[parseStoryPageWithChoices] Extracted choice 1:`, choice1);
   }
 
   if (choice2Match) {
     const choice2Parts = choice2Match[1].trim().split('|').map(s => s.trim());
-    choices.push({
+    const choice2 = {
       text: choice2Parts[0] || '选择2',
       emoji: choice2Parts[1] || '🌟',
       description: choice2Parts[2] || '继续探索'
-    });
+    };
+    choices.push(choice2);
+    console.log(`[parseStoryPageWithChoices] Extracted choice 2:`, choice2);
   }
 
   // 如果没有解析到选择项，提供默认值
   if (choices.length === 0) {
+    console.warn(`[parseStoryPageWithChoices] No choices found for page ${pageNumber}, using default choices`);
     choices.push(
       { text: '继续前进', emoji: '🚀', description: '勇敢地继续前进' },
       { text: '停下来看看', emoji: '🔍', description: '停下来仔细观察' }
     );
+  } else if (choices.length === 1) {
+    // 如果只有一个选择项，添加第二个
+    console.warn(`[parseStoryPageWithChoices] Only one choice found for page ${pageNumber}, adding default second choice`);
+    choices.push(
+      { text: '换个方向', emoji: '🔄', description: '尝试不同的路径' }
+    );
   }
+
+  console.log(`[parseStoryPageWithChoices] Final choices count:`, choices.length);
 
   return {
     text: storyText.endsWith('。') ? storyText : storyText + '。',
@@ -291,7 +375,7 @@ export async function generateStoryPages(
 ): Promise<string[]> {
   const systemPrompt = `想象你正坐在一个温暖的小房间里，周围围着一群好奇的小朋友，他们眼睛亮晶晶地看着你。你不是在"写"故事，而是在用心"讲"故事。
 
-你要讲一个六个场景的绘本故事。每个场景都是一幅画面，配上简短的文字。
+你要讲一个六到七个场景的绘本故事。每个场景都是一幅画面，配上简短的文字。
 
 记住：
 - 故事不是教材，是心与心的对话
@@ -336,7 +420,7 @@ ${themes.length > 0 ? `我们可以聊聊${themes.join('、')}。` : ''}
 示例场景：
 小朋友，你看！${character}正在${setting}里轻轻地走着，它的心里满是${mood}的感觉...
 ---
-（继续用六个独立场景讲述故事）`;
+（继续用六到七个独立场景讲述故事）`;
 
   try {
     const messages: Message[] = [
@@ -349,8 +433,9 @@ ${themes.length > 0 ? `我们可以聊聊${themes.join('、')}。` : ''}
 
     const pages = formatStoryPages(storyContent);
     
-    if (pages.length !== 6) {
-      throw new Error('生成的故事页数不正确');
+    // 支持6-7页
+    if (pages.length < 6 || pages.length > 7) {
+      throw new Error(`生成的故事页数不正确，期望6-7页，实际${pages.length}页`);
     }
 
     return pages.map(page => 

@@ -34,12 +34,11 @@ const StoryQuestion: React.FC<StoryQuestionProps> = ({
     <div className="bg-gradient-to-br from-yellow-50 via-orange-50 to-pink-50 rounded-2xl p-6 shadow-inner border-2 border-yellow-200">
       {/* 问题标题 */}
       <div className="text-center mb-6">
-        <h3 className="text-lg font-semibold text-gray-700 mb-2 flex items-center justify-center gap-2">
-          <Sparkles className="h-5 w-5 text-yellow-500" />
+        <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center justify-center gap-2">
+          <Sparkles className="h-6 w-6 text-yellow-500" />
           {question}
-          <Sparkles className="h-5 w-5 text-yellow-500" />
+          <Sparkles className="h-6 w-6 text-yellow-500" />
         </h3>
-        <p className="text-sm text-gray-500">选择一个答案，看看会发生什么！</p>
       </div>
 
       {/* 选项网格 */}
@@ -72,13 +71,13 @@ const StoryQuestion: React.FC<StoryQuestionProps> = ({
               `}
             >
               {/* 选项内容 */}
-              <div className="flex items-center gap-3">
-                <div className="text-2xl">{option.emoji}</div>
+              <div className="flex items-center gap-4">
+                <div className="text-3xl">{option.emoji}</div>
                 <div className="flex-1 text-left">
-                  <div className="font-medium text-gray-800">{option.text}</div>
+                  <div className="text-lg font-semibold text-gray-800">{option.text}</div>
                   {showFeedback && (
-                    <div className={`text-sm mt-1 ${
-                      isCorrect ? 'text-green-600' : 'text-red-600'
+                    <div className={`text-sm mt-2 font-medium ${
+                      isCorrect ? 'text-green-600' : 'text-pink-600'
                     }`}>
                       {option.feedback}
                     </div>
@@ -110,16 +109,6 @@ const StoryQuestion: React.FC<StoryQuestionProps> = ({
         })}
       </div>
 
-      {/* 选择提示 */}
-      {!selectedAnswer && (
-        <div className="text-center mt-4">
-          <p className="text-xs text-gray-500 flex items-center justify-center gap-1">
-            <Heart className="w-3 h-3" />
-            点击你喜欢的答案
-            <Heart className="w-3 h-3" />
-          </p>
-        </div>
-      )}
     </div>
   );
 };

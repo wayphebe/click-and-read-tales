@@ -17,6 +17,13 @@ export interface StoryPage {
   text: string;
   interactiveElements: InteractiveElement[];
   question?: StoryQuestion; // 新增问题字段
+  // 页面词汇列表（用于复习）
+  vocabulary?: Array<{
+    chinese: string;
+    english: string;
+    phonetic?: string;
+    learned: boolean;  // 是否已学习
+  }>;
 }
 
 // 流式故事页面接口
@@ -55,6 +62,15 @@ export interface InteractiveElement {
   y: number;
   sound?: string;
   reward?: string;
+  // 英文单词学习相关字段
+  vocabulary?: {
+    chinese: string;        // 中文词汇（从故事文本中提取）
+    english: string;       // 英文单词
+    phonetic?: string;      // 音标（可选）
+    example?: string;       // 例句（英文）
+    exampleChinese?: string; // 例句（中文）
+    category?: string;      // 词性：名词/动词/形容词等
+  };
 }
 
 export const categories = ['全部', '情绪管理', '冒险', '童话', '科学', '动物'];

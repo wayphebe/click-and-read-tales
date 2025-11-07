@@ -120,15 +120,29 @@ export async function fetchStoryById(storyId: string): Promise<Storybook | null>
 
     if (pagesError) throw pagesError;
 
-    const storyPages: StoryPage[] = (pages || []).map((page) => ({
-      id: page.id,
-      background: page.background_url,
-      text: page.text,
-      interactiveElements: [], // 暂时为空
-      question: undefined // 暂时为空
-    }));
+    console.log('[fetchStoryById] ====== 从数据库加载故事 ======');
+    console.log('[fetchStoryById] story ID:', storyId);
+    console.log('[fetchStoryById] 加载的页面数量:', pages?.length || 0);
+    console.log('[fetchStoryById] ⚠️ 注意：从数据库加载时，question 字段会丢失（数据库中没有此字段）');
+    
+    const storyPages: StoryPage[] = (pages || []).map((page) => {
+      const storyPage: StoryPage = {
+        id: page.id,
+        background: page.background_url,
+        text: page.text,
+        interactiveElements: [], // 暂时为空
+        question: undefined // 暂时为空 - ⚠️ 数据库中没有保存 question 字段
+      };
+      console.log(`[fetchStoryById] 页面 ${page.page_number} 数据:`, storyPage);
+      return storyPage;
+    });
 
-    return storyRowToStorybook(story, storyPages);
+    const result = storyRowToStorybook(story, storyPages);
+    console.log('[fetchStoryById] ====== 加载完成 ======');
+    console.log('[fetchStoryById] 返回的故事对象:', result);
+    console.log('[fetchStoryById] 返回的故事对象 pages[0].question:', result.pages?.[0]?.question);
+    console.log('[fetchStoryById] ⚠️ 警告：question 字段为 undefined，因为数据库中没有保存');
+    return result;
   } catch (error) {
     console.error('Error fetching story:', error);
     throw error;
@@ -138,6 +152,13 @@ export async function fetchStoryById(storyId: string): Promise<Storybook | null>
 // 保存故事到数据库
 export async function saveStory(story: Storybook, userId: string): Promise<Storybook> {
   try {
+    console.log('[saveStory] ====== 开始保存故事到数据库 ======');
+    console.log('[saveStory] story 对象:', story);
+    console.log('[saveStory] story.pages 数量:', story.pages?.length || 0);
+    console.log('[saveStory] story.pages[0]:', story.pages?.[0]);
+    console.log('[saveStory] story.pages[0].question:', story.pages?.[0]?.question);
+    console.log('[saveStory] story.pages[0].question (JSON):', JSON.stringify(story.pages?.[0]?.question, null, 2));
+    
     // 保存故事基本信息
     const storyRow = storybookToStoryRow(story, userId);
     const { data: savedStory, error: storyError } = await supabase
@@ -146,31 +167,58 @@ export async function saveStory(story: Storybook, userId: string): Promise<Story
       .select()
       .single();
 
-    if (storyError) throw storyError;
+    if (storyError) {
+      console.error('[saveStory] 保存故事基本信息失败:', storyError);
+      throw storyError;
+    }
+    console.log('[saveStory] 故事基本信息保存成功，ID:', savedStory.id);
 
     // 保存页面
     if (story.pages && story.pages.length > 0) {
-      const pageRows = story.pages.map((page, index) => ({
-        story_id: savedStory.id,
-        background_url: page.background,
-        text: page.text,
-        page_number: index + 1
-      }));
+      console.log('[saveStory] ====== 开始保存页面 ======');
+      console.log('[saveStory] 准备保存的页面数量:', story.pages.length);
+      
+      const pageRows = story.pages.map((page, index) => {
+        const pageRow = {
+          story_id: savedStory.id,
+          background_url: page.background,
+          text: page.text,
+          page_number: index + 1
+        };
+        console.log(`[saveStory] 页面 ${index + 1} 数据:`, pageRow);
+        console.log(`[saveStory] 页面 ${index + 1} 原始 question:`, page.question);
+        console.log(`[saveStory] 页面 ${index + 1} question (JSON):`, JSON.stringify(page.question, null, 2));
+        // ⚠️ 注意：question 字段目前没有保存到数据库（数据库 schema 中没有此字段）
+        // 这会导致从数据库加载时 question 丢失
+        return pageRow;
+      });
+
+      console.log('[saveStory] 所有页面数据 (JSON):', JSON.stringify(pageRows, null, 2));
+      console.log('[saveStory] ⚠️ 警告：question 字段未保存到数据库！');
 
       const { error: pagesError } = await supabase
         .from('story_pages')
         .insert(pageRows);
 
-      if (pagesError) throw pagesError;
+      if (pagesError) {
+        console.error('[saveStory] 保存页面失败:', pagesError);
+        throw pagesError;
+      }
+      console.log('[saveStory] 所有页面保存成功');
     }
 
-    // 返回完整的故事对象
-    return {
+    // 返回完整的故事对象（包含 question，因为数据库没有保存）
+    const result = {
       ...story,
       id: savedStory.id
     };
+    console.log('[saveStory] ====== 保存完成 ======');
+    console.log('[saveStory] 返回的故事对象:', result);
+    console.log('[saveStory] 返回的故事对象 pages[0].question:', result.pages?.[0]?.question);
+    console.log('[saveStory] 返回的故事对象 pages[0].question (JSON):', JSON.stringify(result.pages?.[0]?.question, null, 2));
+    return result;
   } catch (error) {
-    console.error('Error saving story:', error);
+    console.error('[saveStory] 保存故事失败:', error);
     throw error;
   }
 }

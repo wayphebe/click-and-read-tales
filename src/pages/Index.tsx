@@ -4,6 +4,7 @@ import { Sparkles, Heart, User, Star, Wand2 } from 'lucide-react';
 import BookCard from '@/components/BookCard';
 import CategoryFilter from '@/components/CategoryFilter';
 import StoryGeneratorDialog from '@/components/StoryGeneratorDialog';
+import Navbar from '@/components/Navbar';
 import { categories, useStorybooksStore, type StreamingStory } from '@/data/storybooksData';
 import type { StoryPrompt } from '@/components/StoryGeneratorDialog';
 import { generateStory } from '@/services/storyGenerator';
@@ -191,6 +192,9 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-magical-background font-magical">
+      {/* 导航栏 */}
+      <Navbar />
+      
       <div className="relative">
         {/* 装饰性星星背景 */}
         <div className="fixed inset-0 pointer-events-none">

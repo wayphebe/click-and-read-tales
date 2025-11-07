@@ -6,6 +6,7 @@ import InteractiveElement from '@/components/InteractiveElement';
 import StoryQuestion from '@/components/StoryQuestion';
 import AudioPlayer from '@/components/AudioPlayer';
 import RewardModal from '@/components/RewardModal';
+import Navbar from '@/components/Navbar';
 import { useToast } from '@/components/ui/use-toast';
 
 const StoryReader = () => {
@@ -233,6 +234,9 @@ const StoryReader = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50">
+      {/* 导航栏 */}
+      <Navbar />
+      
       {/* 生成进度提示 */}
       {isGenerating && isStreamingStory && (
         <div className="fixed top-4 right-4 bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-xl z-50 max-w-xs border border-pink-200">

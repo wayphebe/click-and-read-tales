@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Heart, User, Star, Wand2, Loader2 } from 'lucide-react';
+import { Sparkles, Heart, User, Star, Wand2, Loader2, LogOut } from 'lucide-react';
 import BookCard from '@/components/BookCard';
 import CategoryFilter from '@/components/CategoryFilter';
 import StoryGeneratorDialog from '@/components/StoryGeneratorDialog';
@@ -23,7 +23,7 @@ interface GenerationProgress {
 const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useUserStore();
+  const { user, signOut } = useUserStore();
   const [selectedCategory, setSelectedCategory] = useState('全部');
   const [collectedBooks, setCollectedBooks] = useState<Set<string>>(new Set());
   const [showGenerator, setShowGenerator] = useState(false);
@@ -78,6 +78,24 @@ const Index = () => {
       }
       return newSet;
     });
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "已登出",
+        description: "您已成功登出",
+      });
+      navigate('/login');
+    } catch (error: any) {
+      console.error('Error signing out:', error);
+      toast({
+        title: "登出失败",
+        description: error.message || "登出时出现错误",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleGenerateStory = async (prompt: StoryPrompt) => {
@@ -297,6 +315,28 @@ const Index = () => {
           </div>
           <div className="absolute top-80 right-1/3 text-purple-300 animate-pulse delay-3000">
             <Star className="h-3 w-3" />
+          </div>
+        </div>
+
+        {/* 用户信息栏 - 固定在右上角 */}
+        <div className="fixed top-4 right-4 z-50">
+          <div className="flex items-center gap-3 bg-white/90 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg border border-purple-100">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
+                <User className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-sm font-medium text-gray-700 max-w-[150px] truncate">
+                {user?.email || '用户'}
+              </span>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+              title="登出"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">登出</span>
+            </button>
           </div>
         </div>
 

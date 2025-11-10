@@ -32,6 +32,7 @@ const Index = () => {
     step: '',
     progress: 0
   });
+  const [dialogOpenTime, setDialogOpenTime] = useState<number | null>(null);
   
   const { 
     books, 
@@ -99,6 +100,14 @@ const Index = () => {
   };
 
   const handleGenerateStory = async (prompt: StoryPrompt) => {
+    // 记录模式选择
+    if (user && dialogOpenTime) {
+      await logUserEvent(user.id, 'generation_mode_select', {
+        selected_mode: prompt.streamingMode ? 'streaming' : 'complete',
+        selection_time_ms: Date.now() - dialogOpenTime
+      });
+    }
+    
     if (prompt.streamingMode) {
       // 流式生成模式
       await handleStreamingGeneration(prompt);
@@ -109,6 +118,7 @@ const Index = () => {
   };
 
   const handleStreamingGeneration = async (prompt: StoryPrompt) => {
+    const generationStartTime = Date.now();
     setIsGenerating(true);
     setStoreGenerating(true);
     setGenerationProgress({ step: '正在准备...', progress: 0 });
@@ -215,7 +225,24 @@ const Index = () => {
           addBook(updatedStreamingStory);
           console.log('[Index] store 更新完成');
           
-          await logUserEvent(user.id, 'story_generate', { story_id: savedStory.id });
+          // 计算生成时间
+          const generationTime = Date.now() - generationStartTime;
+          const firstPageReadyTime = generationTime; // 流式模式下，第一页立即就绪
+          
+          await logUserEvent(user.id, 'story_generate', {
+            story_id: savedStory.id,
+            generation_mode: 'streaming',
+            prompt: {
+              mainCharacter: prompt.mainCharacter,
+              mood: prompt.mood,
+              setting: prompt.setting,
+              theme: prompt.theme,
+              additionalElements: prompt.additionalElements
+            },
+            generation_time_ms: generationTime,
+            first_page_ready_time_ms: firstPageReadyTime,
+            total_pages: streamingStory.pages.length
+          });
         } catch (error) {
           console.error('Error saving streaming story:', error);
           // 不阻止用户继续使用，静默失败
@@ -255,6 +282,7 @@ const Index = () => {
       return;
     }
 
+    const generationStartTime = Date.now();
     setIsGenerating(true);
     setGenerationProgress({ step: '正在构思故事...', progress: 0 });
     
@@ -273,8 +301,22 @@ const Index = () => {
       setGenerationProgress({ step: '正在保存故事...', progress: 80 });
       const savedStory = await saveStory(newStory, user.id);
       
-      // 5. 记录事件
-      await logUserEvent(user.id, 'story_generate', { story_id: savedStory.id });
+      // 5. 记录事件（增强）
+      const generationTime = Date.now() - generationStartTime;
+      await logUserEvent(user.id, 'story_generate', {
+        story_id: savedStory.id,
+        generation_mode: 'complete',
+        prompt: {
+          mainCharacter: prompt.mainCharacter,
+          mood: prompt.mood,
+          setting: prompt.setting,
+          theme: prompt.theme,
+          additionalElements: prompt.additionalElements
+        },
+        generation_time_ms: generationTime,
+        first_page_ready_time_ms: generationTime, // 完整模式下，所有内容生成完成后才就绪
+        total_pages: savedStory.pages.length
+      });
       
       // 6. 更新本地状态
       addBook(savedStory);
@@ -375,7 +417,10 @@ const Index = () => {
           {/* 创建故事按钮 */}
           <div className="mb-8 text-center">
             <button
-              onClick={() => setShowGenerator(true)}
+              onClick={() => {
+                setDialogOpenTime(Date.now());
+                setShowGenerator(true);
+              }}
               className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-6 py-3 rounded-full font-semibold hover:from-blue-600 hover:to-cyan-600 transform hover:scale-105 transition-all duration-200 shadow-lg"
             >
               <Wand2 className="h-5 w-5" />
@@ -420,7 +465,10 @@ const Index = () => {
                 }
               </p>
               <button
-                onClick={() => setShowGenerator(true)}
+                onClick={() => {
+                  setDialogOpenTime(Date.now());
+                  setShowGenerator(true);
+                }}
                 className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-full font-semibold hover:from-purple-600 hover:to-pink-600 transform hover:scale-105 transition-all duration-200"
               >
                 <Wand2 className="h-5 w-5" />
@@ -434,7 +482,10 @@ const Index = () => {
       {/* 故事生成对话框 */}
       <StoryGeneratorDialog
         isOpen={showGenerator}
-        onClose={() => setShowGenerator(false)}
+        onClose={() => {
+          setShowGenerator(false);
+          setDialogOpenTime(null);
+        }}
         onGenerate={handleGenerateStory}
         isGenerating={isGenerating}
         generationProgress={generationProgress}

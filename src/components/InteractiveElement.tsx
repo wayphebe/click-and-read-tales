@@ -2,22 +2,32 @@ import React, { useState, useEffect } from 'react';
 import { Sparkles, Heart, CheckCircle } from 'lucide-react';
 import WordCard from './WordCard';
 import type { InteractiveElement as InteractiveElementType } from '@/data/storybooksData';
+import { useUserStore } from '@/store/useUserStore';
+import { logUserEvent } from '@/services/eventService';
 
 interface InteractiveElementProps {
   element: InteractiveElementType;
   onInteraction: (reward: string) => void;
   isInteracted: boolean;
+  storyId?: string;
+  pageId?: string;
+  pageNumber?: number;
 }
 
 const InteractiveElement: React.FC<InteractiveElementProps> = ({
   element,
   onInteraction,
   isInteracted,
+  storyId,
+  pageId,
+  pageNumber,
 }) => {
+  const { user } = useUserStore();
   const [clicked, setClicked] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [showWordCard, setShowWordCard] = useState(false);
   const [showHint, setShowHint] = useState(true);
+  const [hoverStartTime, setHoverStartTime] = useState<number | null>(null);
 
   // 3秒后隐藏提示动画
   useEffect(() => {
@@ -60,8 +70,44 @@ const InteractiveElement: React.FC<InteractiveElementProps> = ({
     <>
       <button
         onClick={handleClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => {
+          setIsHovered(true);
+          const startTime = Date.now();
+          setHoverStartTime(startTime);
+          
+          // 记录悬停开始
+          if (user && storyId && pageId && pageNumber) {
+            logUserEvent(user.id, 'interaction_hover', {
+              story_id: storyId,
+              page_id: pageId,
+              page_number: pageNumber,
+              element_id: element.id,
+              hover_start_time: startTime
+            });
+          }
+        }}
+        onMouseLeave={() => {
+          setIsHovered(false);
+          if (hoverStartTime) {
+            const hoverDuration = Date.now() - hoverStartTime;
+            
+            // 记录悬停结束
+            if (user && storyId && pageId && pageNumber) {
+              logUserEvent(user.id, 'interaction_hover', {
+                story_id: storyId,
+                page_id: pageId,
+                page_number: pageNumber,
+                element_id: element.id,
+                hover_start_time: hoverStartTime,
+                hover_end_time: Date.now(),
+                hover_duration_ms: hoverDuration,
+                resulted_in_click: clicked
+              });
+            }
+            
+            setHoverStartTime(null);
+          }
+        }}
         disabled={isInteracted}
         className={`
           absolute z-20 transition-all duration-300 transform
